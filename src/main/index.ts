@@ -3,10 +3,16 @@ import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { initDatabase } from './db/database'
-import { getAllWorks } from './services/workService'
+import { initDatabase, resetDatabase } from './db/database'
+import { getAllWorks, updateWork } from './services/workService'
 import { scanDirectory } from './services/scanner'
 import { scrapeMissingMetadata } from './services/scraper'
+
+// Register custom protocols as privileged for stream support (required for audio/video seeking)
+protocol.registerSchemesAsPrivileged([
+    { scheme: 'resonate-img', privileges: { secure: true, standard: true, supportFetchAPI: true } },
+    { scheme: 'resonate-audio', privileges: { secure: true, standard: true, supportFetchAPI: true, stream: true } }
+])
 
 function createWindow(): void {
     const mainWindow = new BrowserWindow({
@@ -46,14 +52,52 @@ app.whenReady().then(async () => {
 
     // Register protocol for local images
     protocol.handle('resonate-img', (request) => {
-        const filePath = request.url.replace('resonate-img://', '')
-        return net.fetch(pathToFileURL(decodeURIComponent(filePath)).toString())
+        try {
+            // Parse URL to extract file path
+            // resonate-img://C:/Users/... -> URL parses as host='c', pathname='/Users/...'
+            // We need to reconstruct: C:/Users/...
+            const url = new URL(request.url)
+            let filePath: string
+
+            if (process.platform === 'win32' && url.hostname) {
+                // Windows: hostname is drive letter (lowercase), pathname is rest of path
+                filePath = `${url.hostname.toUpperCase()}:${decodeURIComponent(url.pathname)}`
+            } else {
+                filePath = decodeURIComponent(url.pathname)
+            }
+
+            console.log('[Protocol] resonate-img:', request.url, '->', filePath)
+
+            return net.fetch(pathToFileURL(filePath).toString())
+        } catch (err) {
+            console.error('[Protocol] resonate-img error:', err, request.url)
+            return new Response('Error', { status: 500 })
+        }
     })
 
     // Register protocol for local audio (supports streaming/seeking)
     protocol.handle('resonate-audio', (request) => {
-        const filePath = request.url.replace('resonate-audio://', '')
-        return net.fetch(pathToFileURL(decodeURIComponent(filePath)).toString())
+        try {
+            const url = new URL(request.url)
+            let filePath: string
+
+            if (process.platform === 'win32' && url.hostname) {
+                filePath = `${url.hostname.toUpperCase()}:${decodeURIComponent(url.pathname)}`
+            } else {
+                filePath = decodeURIComponent(url.pathname)
+            }
+
+            console.log('[Protocol] resonate-audio:', request.url, '->', filePath)
+
+            return net.fetch(pathToFileURL(filePath).toString(), {
+                bypassCustomProtocolHandlers: true,
+                method: request.method,
+                headers: request.headers
+            })
+        } catch (err) {
+            console.error('[Protocol] resonate-audio error:', err, request.url)
+            return new Response('Error', { status: 500 })
+        }
     })
 
     // IPC Handlers
@@ -69,8 +113,8 @@ app.whenReady().then(async () => {
         return await scanDirectory(path)
     })
 
-    ipcMain.handle('get-works', async () => {
-        return await getAllWorks()
+    ipcMain.handle('get-works', async (_, options) => {
+        return await getAllWorks(options)
     })
 
     ipcMain.handle('get-audio-files', async (_, dirPath: string) => {
@@ -88,10 +132,27 @@ app.whenReady().then(async () => {
         return await getPlayPosition(workId)
     })
 
+    ipcMain.handle('work:update', async (_, id, data) => {
+        return await updateWork(id, data)
+    })
+
+    ipcMain.handle('select-file', async () => {
+        const { canceled, filePaths } = await dialog.showOpenDialog({
+            properties: ['openFile'],
+            filters: [{ name: 'Images', extensions: ['jpg', 'png', 'jpeg', 'webp'] }]
+        })
+        if (canceled) return null
+        return filePaths[0]
+    })
+
     ipcMain.handle('start-scraping', async () => {
         // Run in background
         scrapeMissingMetadata()
         return true
+    })
+
+    ipcMain.handle('reset-database', async () => {
+        return await resetDatabase()
     })
 
     app.on('browser-window-created', (_, window) => {

@@ -81,13 +81,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             oldHowl.stop()
             oldHowl.unload()
         }
+        // Convert Windows backslashes to forward slashes for URL compatibility
+        // Don't use encodeURIComponent on the whole path as it breaks the path structure
+        const normalizedPath = track.path.replace(/\\/g, '/')
+        const audioUrl = `resonate-audio://${normalizedPath}`
 
-        const audioUrl = `resonate-audio://${encodeURIComponent(track.path)}`
+        console.log('[Player] Loading audio:', audioUrl)
 
         const newHowl = new Howl({
             src: [audioUrl],
             html5: true, // Required for large files and streaming
-            format: [track.path.split('.').pop() || 'mp3'],
+            format: [track.path.split('.').pop()?.toLowerCase() || 'mp3'],
             volume: volume,
             onplay: () => set({ isPlaying: true, duration: newHowl.duration() }),
             onpause: () => set({ isPlaying: false }),
@@ -100,6 +104,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
                 }
             },
             onload: () => set({ duration: newHowl.duration() }),
+            onloaderror: (id, err) => {
+                console.error('[Howler] Load error:', id, err)
+                set({ isPlaying: false })
+            },
+            onplayerror: (id, err) => {
+                console.error('[Howler] Play error:', id, err)
+                newHowl.once('unlock', () => newHowl.play())
+                set({ isPlaying: false })
+            }
         })
 
         set({ howl: newHowl, currentIndex: index, isPlaying: true })
@@ -136,7 +149,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     },
 
     setSleepTimer: (type) => {
-        let remaining = null
+        let remaining: number | null = null
         if (type === '15') remaining = 15 * 60
         if (type === '30') remaining = 30 * 60
         if (type === '60') remaining = 60 * 60
@@ -178,10 +191,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     },
 
     updateProgress: () => {
-        const { howl, isPlaying, currentWork, playlist, currentIndex } = get()
+        const { howl, isPlaying, currentWork, playlist, currentIndex, duration } = get()
         if (howl && isPlaying) {
             const pos = howl.seek() as number
-            set({ progress: pos })
+            const currentDuration = howl.duration()
+
+            // Update duration if it becomes available (HTML5 mode may delay this)
+            if (isFinite(currentDuration) && currentDuration > 0 && (!isFinite(duration) || duration === 0)) {
+                set({ progress: pos, duration: currentDuration })
+            } else {
+                set({ progress: pos })
+            }
 
             // Save position every 10 seconds or so
             if (Math.floor(pos) % 10 === 0 && currentWork && playlist[currentIndex]) {

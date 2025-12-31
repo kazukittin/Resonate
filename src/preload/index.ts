@@ -5,11 +5,14 @@ import { electronAPI } from '@electron-toolkit/preload'
 const api = {
     selectDirectory: () => ipcRenderer.invoke('select-directory'),
     scanDirectory: (path: string) => ipcRenderer.invoke('scan-directory', path),
-    getWorks: () => ipcRenderer.invoke('get-works'),
+    getWorks: (options) => ipcRenderer.invoke('get-works', options),
     getAudioFiles: (dirPath: string) => ipcRenderer.invoke('get-audio-files', dirPath),
     savePosition: (workId: string, filePath: string, position: number) =>
         ipcRenderer.invoke('save-position', workId, filePath, position),
     getPosition: (workId: string) => ipcRenderer.invoke('get-position', workId),
+    updateWork: (id: string, data: any) => ipcRenderer.invoke('work:update', id, data),
+    selectFile: () => ipcRenderer.invoke('select-file'),
+    resetDatabase: () => ipcRenderer.invoke('reset-database'),
     startScraping: () => ipcRenderer.invoke('start-scraping'),
 }
 

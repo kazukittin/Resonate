@@ -1,11 +1,17 @@
-import { useState, useEffect } from 'react'
-import { Disc3, Music2, Settings, ListMusic, FolderOpen, RefreshCw, Search, Play, Pause, SkipBack, SkipForward, Volume2, Moon } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Disc3, Music2, Settings, ListMusic, FolderOpen, RefreshCw, Search, Play, Pause, SkipBack, SkipForward, Volume2, Moon, ArrowUpDown, Trash2 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSettingsStore } from './store/settings'
 import { usePlayerStore } from './store/player'
+import { useSearchStore } from './store/search'
 import { WorkCard } from './components/WorkCard'
+import { SortOption } from '../../../common/types'
 
 const formatTime = (seconds: number) => {
+    // Handle invalid values (Infinity, NaN, negative)
+    if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) {
+        return '--:--'
+    }
     const h = Math.floor(seconds / 3600)
     const m = Math.floor((seconds % 3600) / 60)
     const s = Math.floor(seconds % 60)
@@ -18,6 +24,7 @@ const formatTime = (seconds: number) => {
 function App() {
     const [activeTab, setActiveTab] = useState('library')
     const { libraryPath, setLibraryPath } = useSettingsStore()
+    const { searchQuery, setSearchQuery, sortBy, setSortBy } = useSearchStore()
     const queryClient = useQueryClient()
 
     // Player state
@@ -29,8 +36,8 @@ function App() {
 
     // Queries
     const { data: works } = useQuery({
-        queryKey: ['works'],
-        queryFn: () => window.api.getWorks()
+        queryKey: ['works', searchQuery, sortBy],
+        queryFn: () => window.api.getWorks({ searchQuery, sortBy })
     })
 
     // Mutations
@@ -63,6 +70,13 @@ function App() {
         if (libraryPath) scanMutation.mutate(libraryPath)
     }
 
+    const handleReset = async () => {
+        if (window.confirm('ライブラリと再生履歴をすべて消去しますか？この操作は取り消せません。')) {
+            await window.api.resetDatabase()
+            queryClient.invalidateQueries({ queryKey: ['works'] })
+        }
+    }
+
     const currentTrack = playlist[currentIndex]
 
     return (
@@ -82,14 +96,14 @@ function App() {
                         className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${activeTab === 'library' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                     >
                         <Disc3 className="w-5 h-5" />
-                        Library
+                        ライブラリ
                     </button>
                     <button
                         onClick={() => setActiveTab('playlists')}
                         className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${activeTab === 'playlists' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                     >
                         <ListMusic className="w-5 h-5" />
-                        Playlists
+                        プレイリスト
                     </button>
                 </nav>
 
@@ -99,7 +113,7 @@ function App() {
                         className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${activeTab === 'settings' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                     >
                         <Settings className="w-5 h-5" />
-                        Settings
+                        設定
                     </button>
                 </div>
             </aside>
@@ -107,26 +121,45 @@ function App() {
             {/* Main Content */}
             <main className="flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-background via-background/50 to-primary/5">
                 <header className="h-20 border-b border-border/50 flex items-center justify-between px-8 backdrop-blur-md bg-background/50 sticky top-0 z-10 transition-colors">
-                    <h2 className="text-2xl font-bold capitalize tracking-tight">{activeTab}</h2>
+                    <h2 className="text-2xl font-bold capitalize tracking-tight">
+                        {activeTab === 'library' ? 'ライブラリ' : activeTab === 'settings' ? '設定' : 'プレイリスト'}
+                    </h2>
 
                     <div className="flex items-center gap-4">
-                        <div className="relative">
-                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                            <input
-                                type="text"
-                                placeholder="Search works..."
-                                className="bg-muted/50 border border-border rounded-full pl-10 pr-4 py-1.5 w-64 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all border-none shadow-inner"
-                            />
-                        </div>
                         {activeTab === 'library' && (
-                            <button
-                                onClick={handleScan}
-                                disabled={scanMutation.isPending || !libraryPath}
-                                className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-1.5 rounded-full text-sm font-medium hover:opacity-90 shadow-lg shadow-primary/20 disabled:opacity-50 transition-all"
-                            >
-                                <RefreshCw className={`w-4 h-4 ${scanMutation.isPending ? 'animate-spin' : ''}`} />
-                                Scan Library
-                            </button>
+                            <>
+                                <div className="relative">
+                                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                    <input
+                                        type="text"
+                                        placeholder="タイトル、サークル、声優、RJ..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="bg-muted/50 border border-border rounded-full pl-10 pr-4 py-1.5 w-64 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-inner"
+                                    />
+                                </div>
+                                <div className="relative flex items-center">
+                                    <ArrowUpDown className="w-4 h-4 absolute left-3 text-muted-foreground pointer-events-none" />
+                                    <select
+                                        value={sortBy}
+                                        onChange={(e) => setSortBy(e.target.value as SortOption)}
+                                        className="bg-muted/50 border border-border rounded-full pl-9 pr-8 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all appearance-none cursor-pointer"
+                                    >
+                                        <option value="added_desc">追加日（新しい順）</option>
+                                        <option value="release_date_desc">発売日（新しい順）</option>
+                                        <option value="last_played_desc">最近再生した順</option>
+                                        <option value="title_asc">名前順（あいうえお順）</option>
+                                    </select>
+                                </div>
+                                <button
+                                    onClick={handleScan}
+                                    disabled={scanMutation.isPending || !libraryPath}
+                                    className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-1.5 rounded-full text-sm font-medium hover:opacity-90 shadow-lg shadow-primary/20 disabled:opacity-50 transition-all"
+                                >
+                                    <RefreshCw className={`w-4 h-4 ${scanMutation.isPending ? 'animate-spin' : ''}`} />
+                                    スキャン
+                                </button>
+                            </>
                         )}
                     </div>
                 </header>
@@ -146,8 +179,12 @@ function App() {
                                         <Disc3 className="w-10 h-10 opacity-20 text-primary" />
                                     </div>
                                     <div className="text-center">
-                                        <p className="font-medium text-lg text-foreground">Library is empty</p>
-                                        <p className="text-sm">Configure your library path in Settings and scan for works.</p>
+                                        <p className="font-medium text-lg text-foreground">
+                                            {searchQuery ? '該当する作品が見つかりません' : 'ライブラリが空です'}
+                                        </p>
+                                        <p className="text-sm">
+                                            {searchQuery ? '検索ワードを変えてみてください。' : '設定画面でライブラリのパスを指定し、スキャンを開始してください。'}
+                                        </p>
                                     </div>
                                 </div>
                             )}
@@ -160,36 +197,52 @@ function App() {
                                 <div>
                                     <h3 className="text-xl font-bold flex items-center gap-2">
                                         <FolderOpen className="w-5 h-5 text-primary" />
-                                        Library Location
+                                        ライブラリの場所
                                     </h3>
-                                    <p className="text-sm text-muted-foreground mt-1">Specify where your DLSite works are stored.</p>
+                                    <p className="text-sm text-muted-foreground mt-1">DLSiteの作品が保存されているディレクトリを指定してください。</p>
                                 </div>
 
                                 <div className="flex gap-3">
                                     <div className="flex-1 bg-muted/30 border border-border px-4 py-2.5 rounded-xl text-sm font-mono truncate h-11 flex items-center">
-                                        {libraryPath || 'No directory selected'}
+                                        {libraryPath || 'ディレクトリが選択されていません'}
                                     </div>
                                     <button
                                         onClick={handleSelectDirectory}
                                         className="bg-secondary text-secondary-foreground px-6 py-2.5 rounded-xl font-medium hover:bg-secondary/80 transition-all flex items-center gap-2 shadow-sm border border-border"
                                     >
                                         <FolderOpen className="w-4 h-4" />
-                                        Browse
+                                        参照
                                     </button>
                                 </div>
                             </section>
 
                             <section className="p-6 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-between">
                                 <div className="space-y-1">
-                                    <div className="font-bold">Force Re-fetch Metadata</div>
-                                    <div className="text-sm text-muted-foreground">Scrape missing covers and titles from DLSite.</div>
+                                    <div className="font-bold">メタデータの強制取得</div>
+                                    <div className="text-sm text-muted-foreground">DLSiteから不足している画像やタイトルを取得します。</div>
                                 </div>
                                 <button
                                     onClick={() => window.api.startScraping()}
                                     className="bg-background border border-border px-4 py-2 rounded-lg text-sm font-medium hover:bg-accent transition-all"
                                 >
-                                    Start Scraper
+                                    スクレイパー開始
                                 </button>
+                            </section>
+
+                            <section className="p-6 rounded-2xl bg-destructive/5 border border-destructive/10">
+                                <h4 className="text-sm font-bold text-destructive flex items-center gap-2 mb-1">
+                                    <Trash2 className="w-4 h-4" />
+                                    危険な操作
+                                </h4>
+                                <div className="flex items-center justify-between">
+                                    <div className="text-sm text-muted-foreground">データベースを初期化し、すべての作品情報と再生履歴を消去します。</div>
+                                    <button
+                                        onClick={handleReset}
+                                        className="bg-destructive text-destructive-foreground px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-all shadow-lg shadow-destructive/20"
+                                    >
+                                        データベースを初期化
+                                    </button>
+                                </div>
                             </section>
                         </div>
                     )}
@@ -201,7 +254,7 @@ function App() {
                         <div className="w-20 h-20 bg-muted rounded-xl shrink-0 overflow-hidden shadow-2xl relative group">
                             {currentWork?.thumbnail_path ? (
                                 <img
-                                    src={`resonate-img://${encodeURIComponent(currentWork.thumbnail_path)}`}
+                                    src={`resonate-img://${currentWork.thumbnail_path.replace(/\\/g, '/')}`}
                                     className="w-full h-full object-cover"
                                 />
                             ) : (
@@ -213,10 +266,10 @@ function App() {
                         </div>
                         <div className="min-w-0 flex-1">
                             <div className="font-bold truncate text-sm hover:text-primary cursor-pointer transition-colors">
-                                {currentTrack?.name || 'Not Playing'}
+                                {currentIndex >= 0 && playlist[currentIndex] ? playlist[currentIndex].name : '再生停止中'}
                             </div>
                             <div className="text-xs text-muted-foreground truncate mt-1">
-                                {currentWork?.title || 'Select a work to start'}
+                                {currentWork?.title || '作品を選択して再生を開始してください'}
                             </div>
                             <div className="text-[10px] text-primary font-bold mt-1 uppercase tracking-tighter opacity-70">
                                 {currentWork?.circle_name || ''}
@@ -265,7 +318,7 @@ function App() {
                         <div className="flex flex-col items-end gap-1">
                             {sleepTimerType !== 'off' && (
                                 <span className="text-[10px] font-mono text-primary animate-pulse">
-                                    Timer: {sleepTimerRemaining ? formatTime(sleepTimerRemaining) : 'End of Track'}
+                                    タイマー: {sleepTimerRemaining ? formatTime(sleepTimerRemaining) : 'トラック終了時'}
                                 </span>
                             )}
                             <div className="flex bg-muted/30 p-1 rounded-lg border border-border/50">
@@ -275,7 +328,7 @@ function App() {
                                         onClick={() => setSleepTimer(type)}
                                         className={`px-2 py-1 text-[10px] rounded-md transition-all ${sleepTimerType === type ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                                     >
-                                        {type === 'off' ? 'OFF' : type === 'end' ? 'Track' : '30m'}
+                                        {type === 'off' ? 'OFF' : type === 'end' ? '終了時' : '30分'}
                                     </button>
                                 ))}
                                 <button className="px-2 py-1 text-muted-foreground hover:text-foreground">
@@ -303,7 +356,10 @@ function App() {
                             </div>
                         </div>
                     </div>
-                    <button className="p-2.5 hover:bg-accent rounded-xl transition-all hover:rotate-90 duration-500">
+                    <button
+                        onClick={() => setActiveTab('settings')}
+                        className="p-2.5 hover:bg-accent rounded-xl transition-all hover:rotate-90 duration-500"
+                    >
                         <Settings className="w-5 h-5 text-muted-foreground" />
                     </button>
                 </footer>

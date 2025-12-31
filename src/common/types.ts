@@ -9,3 +9,10 @@ export interface Work {
     last_played_at: string | null
     created_at?: string
 }
+
+export type SortOption = 'added_desc' | 'release_date_desc' | 'last_played_desc' | 'title_asc'
+
+export interface GetWorksOptions {
+    searchQuery?: string
+    sortBy: SortOption
+}

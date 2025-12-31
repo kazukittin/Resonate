@@ -44,3 +44,9 @@ export async function initDatabase() {
 
     console.log(`[DB] Database initialized at: ${dbPath}`)
 }
+
+export async function resetDatabase() {
+    await db.deleteFrom('play_history').execute()
+    await db.deleteFrom('works').execute()
+    console.log('[DB] Database reset: all works and history cleared.')
+}
