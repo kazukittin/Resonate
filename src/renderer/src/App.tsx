@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react'
-import { Disc3, Music2, Settings, ListMusic, FolderOpen, RefreshCw, Search, Play, Pause, SkipBack, SkipForward, Volume2, Moon, ArrowUpDown, Trash2 } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Disc3, Music2, Settings, ListMusic, FolderOpen, RefreshCw, Search, Play, Pause, SkipBack, SkipForward, Volume2, Moon, ArrowUpDown, Trash2, Filter } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSettingsStore } from './store/settings'
 import { usePlayerStore } from './store/player'
 import { useSearchStore } from './store/search'
 import { WorkCard } from './components/WorkCard'
 import { PlaylistManager } from './components/PlaylistManager'
+import { FilterDialog } from './components/FilterDialog'
 import { SortOption } from '../../common/types'
 import { encodePathForProtocol } from './utils/pathUtils'
 
@@ -25,8 +26,9 @@ const formatTime = (seconds: number) => {
 
 function App() {
     const [activeTab, setActiveTab] = useState<'library' | 'settings' | 'playlists'>('library')
+    const [isFilterOpen, setIsFilterOpen] = useState(false)
     const { libraryPath, setLibraryPath } = useSettingsStore()
-    const { searchQuery, setSearchQuery, sortBy, setSortBy } = useSearchStore()
+    const { searchQuery, setSearchQuery, sortBy, setSortBy, filters, clearFilters } = useSearchStore()
     const queryClient = useQueryClient()
 
     // Player state
@@ -41,6 +43,42 @@ function App() {
         queryKey: ['works', searchQuery, sortBy],
         queryFn: () => window.api.getWorks({ searchQuery, sortBy })
     })
+
+    // Filter works based on advanced filters
+    const filteredWorks = useMemo(() => {
+        if (!works) return []
+
+        return works.filter(work => {
+            // Keyword filter (from header or dialog)
+            if (searchQuery) {
+                const keyword = searchQuery.toLowerCase()
+                const matches =
+                    work.id.toLowerCase().includes(keyword) ||
+                    work.title?.toLowerCase().includes(keyword) ||
+                    work.circle_name?.toLowerCase().includes(keyword) ||
+                    work.cv_names?.toLowerCase().includes(keyword)
+                if (!matches) return false
+            }
+
+            // CV filter
+            if (filters.cvs.length > 0) {
+                const workCvs = work.cv_names?.split(/[,、/／]/).map(cv => cv.trim()) || []
+                const hasCv = filters.cvs.some(cv => workCvs.includes(cv))
+                if (!hasCv) return false
+            }
+
+            // Tag filter
+            if (filters.tags.length > 0) {
+                const workTags = work.tags?.split(',').map(tag => tag.trim()) || []
+                const hasTag = filters.tags.some(tag => workTags.includes(tag))
+                if (!hasTag) return false
+            }
+
+            return true
+        })
+    }, [works, searchQuery, filters])
+
+    const activeFilterCount = filters.cvs.length + filters.tags.length + (searchQuery ? 1 : 0)
 
     // Listen for work updates from scraper
     useEffect(() => {
@@ -158,6 +196,18 @@ function App() {
                                     </select>
                                 </div>
                                 <button
+                                    onClick={() => setIsFilterOpen(true)}
+                                    className={`relative flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${activeFilterCount > 0 ? 'bg-primary text-primary-foreground' : 'bg-muted/50 border border-border hover:bg-accent'}`}
+                                >
+                                    <Filter className="w-4 h-4" />
+                                    フィルター
+                                    {activeFilterCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-[10px] font-bold rounded-full flex items-center justify-center">
+                                            {activeFilterCount}
+                                        </span>
+                                    )}
+                                </button>
+                                <button
                                     onClick={handleScan}
                                     disabled={scanMutation.isPending || !libraryPath}
                                     className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-1.5 rounded-full text-sm font-medium hover:opacity-90 shadow-lg shadow-primary/20 disabled:opacity-50 transition-all"
@@ -173,9 +223,36 @@ function App() {
                 <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                     {activeTab === 'library' && (
                         <>
-                            {works && works.length > 0 ? (
+                            {/* Active filter pills */}
+                            {activeFilterCount > 0 && (
+                                <div className="flex flex-wrap items-center gap-2 mb-4">
+                                    <span className="text-sm text-muted-foreground">フィルター:</span>
+                                    {searchQuery && (
+                                        <span className="px-2 py-1 bg-accent rounded-full text-xs">
+                                            キーワード: {searchQuery}
+                                        </span>
+                                    )}
+                                    {filters.cvs.map(cv => (
+                                        <span key={cv} className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs">
+                                            CV: {cv}
+                                        </span>
+                                    ))}
+                                    {filters.tags.map(tag => (
+                                        <span key={tag} className="px-2 py-1 bg-primary/20 text-primary rounded-full text-xs">
+                                            {tag}
+                                        </span>
+                                    ))}
+                                    <button
+                                        onClick={clearFilters}
+                                        className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                    >
+                                        クリア
+                                    </button>
+                                </div>
+                            )}
+                            {filteredWorks.length > 0 ? (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-6">
-                                    {works.map((work) => (
+                                    {filteredWorks.map((work) => (
                                         <WorkCard key={work.id} work={work} onClick={() => playWork(work)} />
                                     ))}
                                 </div>
@@ -186,10 +263,10 @@ function App() {
                                     </div>
                                     <div className="text-center">
                                         <p className="font-medium text-lg text-foreground">
-                                            {searchQuery ? '該当する作品が見つかりません' : 'ライブラリが空です'}
+                                            {searchQuery || activeFilterCount > 0 ? '該当する作品が見つかりません' : 'ライブラリが空です'}
                                         </p>
                                         <p className="text-sm">
-                                            {searchQuery ? '検索ワードを変えてみてください。' : '設定画面でライブラリのパスを指定し、スキャンを開始してください。'}
+                                            {searchQuery || activeFilterCount > 0 ? 'フィルター条件を変えてみてください。' : '設定画面でライブラリのパスを指定し、スキャンを開始してください。'}
                                         </p>
                                     </div>
                                 </div>
@@ -374,6 +451,14 @@ function App() {
                     </button>
                 </footer>
             </main>
+
+            {/* Filter Dialog */}
+            {isFilterOpen && works && (
+                <FilterDialog
+                    works={works}
+                    onClose={() => setIsFilterOpen(false)}
+                />
+            )}
         </div>
     )
 }
