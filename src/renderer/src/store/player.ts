@@ -81,19 +81,39 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             oldHowl.stop()
             oldHowl.unload()
         }
-        // Convert Windows backslashes to forward slashes for URL compatibility
-        // Don't use encodeURIComponent on the whole path as it breaks the path structure
-        const normalizedPath = track.path.replace(/\\/g, '/')
-        const audioUrl = `resonate-audio://${normalizedPath}`
+        // Properly encode the path for URL usage
+        // We need to encode each path segment individually to preserve / and :
+        const encodePath = (p: string) => {
+            // Replace backslashes with forward slashes
+            const normalized = p.replace(/\\/g, '/')
+            // Split, encode each segment, rejoin
+            const parts = normalized.split('/')
+            return parts.map((part, i) => {
+                // Don't encode drive letter (e.g., "C:")
+                if (i === 0 && /^[A-Za-z]:$/.test(part)) {
+                    return part.toLowerCase().replace(':', '') // C: -> c
+                }
+                return encodeURIComponent(part)
+            }).join('/')
+        }
 
-        console.log('[Player] Loading audio:', audioUrl)
+        const audioUrl = `resonate-audio://${encodePath(track.path)}`
+        const format = track.path.split('.').pop()?.toLowerCase() || 'mp3'
+
+        // Use Web Audio API (html5: false) for MP3 to get accurate duration
+        // Use HTML5 mode for other formats (m4a, flac, etc.) for streaming support
+        const useHtml5 = format !== 'mp3'
+
+        console.log('[Player] Loading audio:', audioUrl, 'format:', format, 'html5:', useHtml5)
 
         const newHowl = new Howl({
             src: [audioUrl],
-            html5: true, // Required for large files and streaming
-            format: [track.path.split('.').pop()?.toLowerCase() || 'mp3'],
+            html5: useHtml5,
+            format: [format],
             volume: volume,
-            onplay: () => set({ isPlaying: true, duration: newHowl.duration() }),
+            onplay: () => {
+                set({ isPlaying: true, duration: newHowl.duration() })
+            },
             onpause: () => set({ isPlaying: false }),
             onstop: () => set({ isPlaying: false, progress: 0 }),
             onend: () => {
@@ -196,9 +216,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             const pos = howl.seek() as number
             const currentDuration = howl.duration()
 
-            // Update duration if it becomes available (HTML5 mode may delay this)
-            if (isFinite(currentDuration) && currentDuration > 0 && (!isFinite(duration) || duration === 0)) {
-                set({ progress: pos, duration: currentDuration })
+            // Always update duration when valid - MP3 VBR files may report duration late
+            if (isFinite(currentDuration) && currentDuration > 0) {
+                // Only update if different (to avoid unnecessary re-renders)
+                if (Math.abs(currentDuration - duration) > 0.5 || !isFinite(duration)) {
+                    set({ progress: pos, duration: currentDuration })
+                } else {
+                    set({ progress: pos })
+                }
             } else {
                 set({ progress: pos })
             }

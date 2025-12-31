@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react'
-import { Disc3, Music2, Settings, ListMusic, FolderOpen, RefreshCw, Search, Play, Pause, SkipBack, SkipForward, Volume2, Moon, ArrowUpDown, Trash2 } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Disc3, Music2, Settings, ListMusic, FolderOpen, RefreshCw, Search, Play, Pause, SkipBack, SkipForward, Volume2, Moon, ArrowUpDown, Trash2, Folder } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSettingsStore } from './store/settings'
 import { usePlayerStore } from './store/player'
 import { useSearchStore } from './store/search'
 import { WorkCard } from './components/WorkCard'
-import { SortOption } from '../../../common/types'
+import { SortOption } from '../../common/types'
+import { encodePathForProtocol } from './utils/pathUtils'
 
 const formatTime = (seconds: number) => {
     // Handle invalid values (Infinity, NaN, negative)
@@ -22,7 +23,7 @@ const formatTime = (seconds: number) => {
 }
 
 function App() {
-    const [activeTab, setActiveTab] = useState('library')
+    const [activeTab, setActiveTab] = useState<'library' | 'settings' | 'playlists'>('library')
     const { libraryPath, setLibraryPath } = useSettingsStore()
     const { searchQuery, setSearchQuery, sortBy, setSortBy } = useSearchStore()
     const queryClient = useQueryClient()
@@ -77,7 +78,21 @@ function App() {
         }
     }
 
-    const currentTrack = playlist[currentIndex]
+    const groupedPlaylist = useMemo(() => {
+        const groups: { [folder: string]: typeof playlist } = {}
+        playlist.forEach(track => {
+            // Check for both Windows and Unix separators
+            // The name property is a relative path (e.g. "To/File.mp3" or "To\File.mp3")
+            const parts = track.name.split(/[/\\]/)
+            const folder = parts.length > 1 ? parts.slice(0, -1).join('/') : '本編'
+
+            if (!groups[folder]) groups[folder] = []
+            groups[folder].push(track)
+        })
+        return groups
+    }, [playlist])
+
+    // currentTrack available if needed: playlist[currentIndex]
 
     return (
         <div className="flex h-screen w-full overflow-hidden bg-background text-foreground font-sans">
@@ -104,6 +119,11 @@ function App() {
                     >
                         <ListMusic className="w-5 h-5" />
                         プレイリスト
+                        {playlist.length > 0 && (
+                            <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-bold">
+                                {playlist.length}
+                            </span>
+                        )}
                     </button>
                 </nav>
 
@@ -246,6 +266,82 @@ function App() {
                             </section>
                         </div>
                     )}
+
+                    {activeTab === 'playlists' && (
+                        <div className="max-w-4xl mx-auto space-y-8 pb-20">
+                            {playlist.length > 0 ? (
+                                <>
+                                    {/* Groups */}
+                                    {Object.entries(groupedPlaylist).sort((a, b) => a[0] === '本編' ? -1 : b[0] === '本編' ? 1 : a[0].localeCompare(b[0])).map(([folder, tracks]) => (
+                                        <div key={folder} className="space-y-3">
+                                            <div className="flex items-center gap-2 text-primary font-bold text-sm tracking-widest uppercase border-b border-border/50 pb-2">
+                                                <Folder className="w-4 h-4" />
+                                                {folder}
+                                                <span className="ml-auto text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground font-medium">
+                                                    {tracks.length}
+                                                </span>
+                                            </div>
+                                            <div className="grid gap-2">
+                                                {tracks.map((track) => {
+                                                    const playlistIndex = playlist.indexOf(track)
+                                                    const isCurrent = playlistIndex === currentIndex
+                                                    // Display name: remove folder path from name
+                                                    const displayName = track.name.split(/[/\\]/).pop() || track.name
+
+                                                    return (
+                                                        <div
+                                                            key={track.path}
+                                                            onClick={() => usePlayerStore.getState().playTrack(playlistIndex)}
+                                                            className={`
+                                                                group flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer border border-transparent
+                                                                ${isCurrent
+                                                                    ? 'bg-primary/10 border-primary/20 shadow-sm'
+                                                                    : 'hover:bg-card hover:border-border/50 hover:shadow-sm'
+                                                                }
+                                                            `}
+                                                        >
+                                                            <div className={`
+                                                                w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors
+                                                                ${isCurrent ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground group-hover:bg-secondary group-hover:text-secondary-foreground'}
+                                                            `}>
+                                                                {isCurrent ? (
+                                                                    isPlaying ? <Music2 className="w-4 h-4 animate-pulse" /> : <Pause className="w-4 h-4" />
+                                                                ) : (
+                                                                    <Play className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                                )}
+                                                                {!isCurrent && <span className="text-xs font-mono font-bold absolute group-hover:opacity-0 transition-opacity">{String(playlistIndex + 1).padStart(2, '0')}</span>}
+                                                            </div>
+
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className={`font-medium truncate ${isCurrent ? 'text-primary' : 'text-foreground'}`}>
+                                                                    {displayName}
+                                                                </div>
+                                                                <div className="text-xs text-muted-foreground truncate opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+                                                                    {track.path}
+                                                                </div>
+                                                            </div>
+
+                                                            {isCurrent && (
+                                                                <div className="mx-2">
+                                                                    <div className="w-2 h-2 rounded-full bg-primary animate-ping" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </>
+                            ) : (
+                                <div className="h-64 flex flex-col items-center justify-center text-muted-foreground">
+                                    <ListMusic className="w-16 h-16 mb-4 opacity-20" />
+                                    <p>再生中のプレイリストはありません</p>
+                                    <p className="text-sm mt-2">ライブラリから作品を選択して再生してください</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Player Bar */}
@@ -254,7 +350,7 @@ function App() {
                         <div className="w-20 h-20 bg-muted rounded-xl shrink-0 overflow-hidden shadow-2xl relative group">
                             {currentWork?.thumbnail_path ? (
                                 <img
-                                    src={`resonate-img://${currentWork.thumbnail_path.replace(/\\/g, '/')}`}
+                                    src={`resonate-img://${encodePathForProtocol(currentWork.thumbnail_path)}`}
                                     className="w-full h-full object-cover"
                                 />
                             ) : (

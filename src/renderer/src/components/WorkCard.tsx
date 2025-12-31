@@ -7,12 +7,13 @@ interface WorkCardProps {
     work: Work
     onClick?: () => void
 }
+import { encodePathForProtocol } from '../utils/pathUtils'
 
 export function WorkCard({ work, onClick }: WorkCardProps) {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
     const thumbnailSrc = work.thumbnail_path
-        ? `resonate-img://${work.thumbnail_path.replace(/\\/g, '/')}`
+        ? `resonate-img://${encodePathForProtocol(work.thumbnail_path)}`
         : null
 
     const handleEditClick = (e: React.MouseEvent) => {

@@ -53,20 +53,20 @@ app.whenReady().then(async () => {
     // Register protocol for local images
     protocol.handle('resonate-img', (request) => {
         try {
-            // Parse URL to extract file path
-            // resonate-img://C:/Users/... -> URL parses as host='c', pathname='/Users/...'
-            // We need to reconstruct: C:/Users/...
-            const url = new URL(request.url)
-            let filePath: string
+            // Extract path after protocol prefix: resonate-img://
+            // The path may be URL-encoded (Japanese characters etc)
+            let rawPath = request.url.substring('resonate-img://'.length)
 
-            if (process.platform === 'win32' && url.hostname) {
-                // Windows: hostname is drive letter (lowercase), pathname is rest of path
-                filePath = `${url.hostname.toUpperCase()}:${decodeURIComponent(url.pathname)}`
-            } else {
-                filePath = decodeURIComponent(url.pathname)
+            // URL class lowercases the hostname (drive letter), so we extract manually
+            // Format: C/Users/... or c/Users/... -> C:/Users/...
+            if (process.platform === 'win32' && /^[a-zA-Z]\//.test(rawPath)) {
+                rawPath = rawPath[0].toUpperCase() + ':' + rawPath.substring(1)
             }
 
-            console.log('[Protocol] resonate-img:', request.url, '->', filePath)
+            // Decode URI components (handles %E3%83%... -> Japanese chars)
+            const filePath = decodeURIComponent(rawPath)
+
+            console.log('[Protocol] resonate-img:', filePath)
 
             return net.fetch(pathToFileURL(filePath).toString())
         } catch (err) {
@@ -76,18 +76,26 @@ app.whenReady().then(async () => {
     })
 
     // Register protocol for local audio (supports streaming/seeking)
-    protocol.handle('resonate-audio', (request) => {
+    protocol.handle('resonate-audio', async (request) => {
         try {
-            const url = new URL(request.url)
-            let filePath: string
+            let rawPath = request.url.substring('resonate-audio://'.length)
 
-            if (process.platform === 'win32' && url.hostname) {
-                filePath = `${url.hostname.toUpperCase()}:${decodeURIComponent(url.pathname)}`
-            } else {
-                filePath = decodeURIComponent(url.pathname)
+            console.log('[Protocol] Raw URL path:', rawPath)
+
+            if (process.platform === 'win32' && /^[a-zA-Z]\//.test(rawPath)) {
+                rawPath = rawPath[0].toUpperCase() + ':' + rawPath.substring(1)
             }
 
-            console.log('[Protocol] resonate-audio:', request.url, '->', filePath)
+            const filePath = decodeURIComponent(rawPath)
+
+            console.log('[Protocol] Decoded file path:', filePath)
+
+            // Check if file exists
+            const fs = require('fs')
+            if (!fs.existsSync(filePath)) {
+                console.error('[Protocol] File not found:', filePath)
+                return new Response('File not found', { status: 404 })
+            }
 
             return net.fetch(pathToFileURL(filePath).toString(), {
                 bypassCustomProtocolHandlers: true,

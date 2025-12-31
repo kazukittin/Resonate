@@ -9,6 +9,8 @@ interface EditWorkDialogProps {
     onClose: () => void
 }
 
+import { encodePathForProtocol } from '../utils/pathUtils'
+
 export function EditWorkDialog({ work, isOpen, onClose }: EditWorkDialogProps) {
     const [title, setTitle] = useState(work.title || '')
     const [circle, setCircle] = useState(work.circle_name || '')
@@ -44,8 +46,8 @@ export function EditWorkDialog({ work, isOpen, onClose }: EditWorkDialogProps) {
     }
 
     const thumbnailSrc = newCoverPath
-        ? `resonate-img://${newCoverPath.replace(/\\/g, '/')}`
-        : (work.thumbnail_path ? `resonate-img://${work.thumbnail_path.replace(/\\/g, '/')}` : null)
+        ? `resonate-img://${encodePathForProtocol(newCoverPath)}`
+        : (work.thumbnail_path ? `resonate-img://${encodePathForProtocol(work.thumbnail_path)}` : null)
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">

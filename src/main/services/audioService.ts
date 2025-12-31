@@ -3,26 +3,43 @@ import path from 'path'
 
 const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.flac', '.ogg']
 
-export async function getAudioFiles(dirPath: string) {
-    try {
-        const entries = await fs.readdir(dirPath, { withFileTypes: true })
-        const audioFiles = entries
-            .filter((entry) => {
-                if (!entry.isFile()) return false
-                const ext = path.extname(entry.name).toLowerCase()
-                return AUDIO_EXTENSIONS.includes(ext)
-            })
-            .map((entry) => ({
-                name: entry.name,
-                path: path.join(dirPath, entry.name),
-            }))
-            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+// Recursively get all audio files from a directory and its subdirectories
+export async function getAudioFiles(dirPath: string): Promise<{ name: string; path: string }[]> {
+    const audioFiles: { name: string; path: string }[] = []
 
-        return audioFiles
-    } catch (error) {
-        console.error('[AudioService] Error reading audio files:', error)
-        return []
+    async function scanDirectory(currentPath: string) {
+        try {
+            const entries = await fs.readdir(currentPath, { withFileTypes: true })
+
+            for (const entry of entries) {
+                const fullPath = path.join(currentPath, entry.name)
+
+                if (entry.isDirectory()) {
+                    // Recursively scan subdirectories
+                    await scanDirectory(fullPath)
+                } else if (entry.isFile()) {
+                    const ext = path.extname(entry.name).toLowerCase()
+                    if (AUDIO_EXTENSIONS.includes(ext)) {
+                        // Use relative path from root for display name
+                        const relativePath = path.relative(dirPath, fullPath)
+                        audioFiles.push({
+                            name: relativePath,
+                            path: fullPath,
+                        })
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[AudioService] Error scanning directory:', currentPath, error)
+        }
     }
+
+    await scanDirectory(dirPath)
+
+    // Sort by name (path) for consistent ordering
+    audioFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }))
+
+    return audioFiles
 }
 
 export async function savePlayPosition(workId: string, filePath: string, position: number) {
