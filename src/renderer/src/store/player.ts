@@ -16,6 +16,7 @@ interface PlayerState {
     progress: number // Current position in seconds
     duration: number // Total duration in seconds
     volume: number
+    isSeeking: boolean
     sleepTimerType: 'off' | '15' | '30' | '60' | 'end'
     sleepTimerRemaining: number | null // seconds
 
@@ -42,6 +43,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     progress: 0,
     duration: 0,
     volume: 0.8,
+    isSeeking: false,
     sleepTimerType: 'off',
     sleepTimerRemaining: null,
 
@@ -137,6 +139,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
                 }
             },
             onload: () => set({ duration: newHowl.duration() }),
+            // Note: onseek fires too early before position updates, so we use polling instead
             onloaderror: (id, err) => {
                 console.error('[Howler] Load error:', id, err)
                 set({ isPlaying: false })
@@ -170,8 +173,42 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     seek: (seconds: number) => {
         const { howl } = get()
         if (howl) {
+            console.log('[PlayerStore] Seeking to:', seconds)
+            set({ isSeeking: true, progress: seconds })
             howl.seek(seconds)
-            set({ progress: seconds })
+
+            // Poll to check when seek actually completes
+            // HTML5 Audio doesn't update position immediately after seek()
+            let attempts = 0
+            const maxAttempts = 30 // 3 seconds max wait
+
+            const checkSeekComplete = () => {
+                attempts++
+                const currentPos = howl.seek() as number
+
+                // Check if position is now close to target (within 2 seconds) or we've waited too long
+                if (typeof currentPos === 'number' && isFinite(currentPos)) {
+                    const isCloseEnough = Math.abs(currentPos - seconds) < 2
+                    const isMovedFromZero = currentPos > 0.5 || seconds < 1
+
+                    console.log('[PlayerStore] Seek poll:', { attempt: attempts, currentPos, target: seconds, isCloseEnough })
+
+                    if ((isCloseEnough && isMovedFromZero) || attempts >= maxAttempts) {
+                        set({ progress: currentPos, isSeeking: false })
+                        return
+                    }
+                }
+
+                if (attempts < maxAttempts) {
+                    setTimeout(checkSeekComplete, 100)
+                } else {
+                    // Give up and use whatever position we have
+                    set({ isSeeking: false })
+                }
+            }
+
+            // Start polling after a short delay to allow seek to initiate
+            setTimeout(checkSeekComplete, 100)
         }
     },
 
@@ -224,9 +261,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     },
 
     updateProgress: () => {
-        const { howl, isPlaying, currentWork, playlist, currentIndex, duration } = get()
-        if (howl && isPlaying) {
+        const { howl, isPlaying, currentWork, playlist, currentIndex, duration, isSeeking } = get()
+        if (howl && isPlaying && !isSeeking) {
             const pos = howl.seek() as number
+
+            // Howler.seek() can return the Howl object if called at the wrong moment
+            if (typeof pos !== 'number') return
+
             const currentDuration = howl.duration()
 
             // Always update duration when valid - MP3 VBR files may report duration late

@@ -76,24 +76,24 @@ export function PlaylistManager() {
         loadPlaylists()
     }
 
-    const handlePlayPlaylist = async () => {
-        if (!playlistTracks.length) return
-        // Play the first track
-        // Note: This requires custom implementation since tracks may be from different works
-        // For now, we'll just play each track individually
-        const firstTrack = playlistTracks[0]
-        if (firstTrack.work_id) {
+    const handlePlayTrack = async (track: PlaylistTrack) => {
+        if (track.work_id) {
             const works = await window.api.getWorks({ sortBy: 'added_desc' })
-            const work = works.find(w => w.id === firstTrack.work_id)
+            const work = works.find(w => w.id === track.work_id)
             if (work) {
-                // Find the track index in the work
                 const audioFiles = await window.api.getAudioFiles(work.local_path)
-                const trackIndex = audioFiles.findIndex(f => f.path === firstTrack.track_path)
+                const trackIndex = audioFiles.findIndex(f => f.path === track.track_path)
                 if (trackIndex !== -1) {
                     playWorkFromTrack(work, trackIndex)
                 }
             }
         }
+    }
+
+    const handlePlayPlaylist = async () => {
+        if (!playlistTracks.length) return
+        // Play the first track
+        await handlePlayTrack(playlistTracks[0])
     }
 
     if (loading) {
@@ -280,24 +280,31 @@ export function PlaylistManager() {
                                     <p className="text-sm mt-1">作品のトラック一覧から追加できます</p>
                                 </div>
                             ) : (
-                                <div className="space-y-1">
+                                <div className="space-y-1 overflow-hidden">
                                     {playlistTracks.map((track, index) => (
                                         <div
                                             key={track.id}
-                                            className="group flex items-center gap-3 p-3 rounded-xl hover:bg-accent transition-all"
+                                            className="group flex items-center gap-3 p-3 rounded-xl hover:bg-accent transition-all overflow-hidden"
                                         >
-                                            <span className="text-xs text-muted-foreground font-mono w-6">
+                                            <button
+                                                onClick={() => handlePlayTrack(track)}
+                                                className="w-8 h-8 bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground rounded-lg flex items-center justify-center shrink-0 transition-all"
+                                                title="再生"
+                                            >
+                                                <Play className="w-4 h-4 fill-current translate-x-0.5" />
+                                            </button>
+                                            <span className="text-xs text-muted-foreground font-mono w-6 shrink-0">
                                                 {String(index + 1).padStart(2, '0')}
                                             </span>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="font-medium truncate">{track.track_name}</div>
+                                            <div className="flex-1 min-w-0 overflow-hidden">
+                                                <div className="font-medium truncate text-sm">{track.track_name}</div>
                                                 {track.work_id && (
                                                     <div className="text-xs text-muted-foreground truncate">{track.work_id}</div>
                                                 )}
                                             </div>
                                             <button
                                                 onClick={() => handleRemoveTrack(track.id)}
-                                                className="p-1.5 hover:bg-destructive/20 text-destructive rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                                className="p-1.5 hover:bg-destructive/20 text-destructive rounded-lg transition-colors opacity-0 group-hover:opacity-100 shrink-0"
                                                 title="削除"
                                             >
                                                 <Trash2 className="w-4 h-4" />

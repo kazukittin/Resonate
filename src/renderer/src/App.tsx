@@ -7,6 +7,7 @@ import { useSearchStore } from './store/search'
 import { WorkCard } from './components/WorkCard'
 import { PlaylistManager } from './components/PlaylistManager'
 import { FilterDialog } from './components/FilterDialog'
+import { MiniPlayer } from './components/MiniPlayer'
 import { SortOption } from '../../common/types'
 import { encodePathForProtocol } from './utils/pathUtils'
 
@@ -25,17 +26,19 @@ const formatTime = (seconds: number) => {
 }
 
 function App() {
-    const [activeTab, setActiveTab] = useState<'library' | 'settings' | 'playlists'>('library')
+    const [activeTab, setActiveTab] = useState<'library' | 'settings' | 'playlists' | 'queue'>('library')
     const [isFilterOpen, setIsFilterOpen] = useState(false)
     const { libraryPath, setLibraryPath } = useSettingsStore()
-    const { searchQuery, setSearchQuery, sortBy, setSortBy, filters, clearFilters } = useSearchStore()
+    const { searchQuery, sortBy, setSortBy, filters, clearFilters } = useSearchStore()
     const queryClient = useQueryClient()
+    const [scrubProgress, setScrubProgress] = useState<number | null>(null)
+    const [showMiniPlayer, setShowMiniPlayer] = useState(false)
 
     // Player state
     const {
         currentWork, playlist, currentIndex, isPlaying, progress, duration, volume,
-        sleepTimerType, sleepTimerRemaining,
-        playWork, togglePlay, next, prev, seek, setVolume, updateProgress, setSleepTimer, tickSleepTimer
+        sleepTimerType, sleepTimerRemaining, isSeeking,
+        playWork, togglePlay, next, prev, seek, setVolume, updateProgress, setSleepTimer, tickSleepTimer, playTrack
     } = usePlayerStore()
 
     // Queries
@@ -79,6 +82,17 @@ function App() {
     }, [works, searchQuery, filters])
 
     const activeFilterCount = filters.cvs.length + filters.tags.length + (searchQuery ? 1 : 0)
+
+    // Grouping for playback queue (Folder-based)
+    const groupedQueue = useMemo(() => {
+        const groups: { [key: string]: typeof playlist } = {}
+        playlist.forEach(track => {
+            const folder = track.name.includes('/') ? track.name.split('/')[0] : 'なし'
+            if (!groups[folder]) groups[folder] = []
+            groups[folder].push(track)
+        })
+        return groups
+    }, [playlist])
 
     // Listen for work updates from scraper
     useEffect(() => {
@@ -153,6 +167,13 @@ function App() {
                     >
                         <ListMusic className="w-5 h-5" />
                         プレイリスト
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('queue')}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${activeTab === 'queue' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                    >
+                        <Play className="w-5 h-5" />
+                        再生キュー
                         {playlist.length > 0 && (
                             <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-bold">
                                 {playlist.length}
@@ -172,16 +193,6 @@ function App() {
                     <div className="flex items-center gap-4">
                         {activeTab === 'library' && (
                             <>
-                                <div className="relative">
-                                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                                    <input
-                                        type="text"
-                                        placeholder="タイトル、サークル、声優、RJ..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="bg-muted/50 border border-border rounded-full pl-10 pr-4 py-1.5 w-64 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-inner"
-                                    />
-                                </div>
                                 <div className="relative flex items-center">
                                     <ArrowUpDown className="w-4 h-4 absolute left-3 text-muted-foreground pointer-events-none" />
                                     <select
@@ -333,123 +344,177 @@ function App() {
                     {activeTab === 'playlists' && (
                         <PlaylistManager />
                     )}
+
+                    {activeTab === 'queue' && (
+                        <div className="space-y-8">
+                            {Object.entries(groupedQueue).length > 0 ? (
+                                Object.entries(groupedQueue).map(([folder, tracks]) => (
+                                    <section key={folder} className="space-y-4">
+                                        <h3 className="text-xl font-bold flex items-center gap-2 text-primary">
+                                            <FolderOpen className="w-5 h-5" />
+                                            {folder}
+                                        </h3>
+                                        <div className="bg-card/50 border border-border rounded-2xl overflow-hidden shadow-sm">
+                                            {tracks.map((track, i) => {
+                                                const globalIdx = playlist.findIndex(t => t === track)
+                                                const isActive = currentIndex === globalIdx
+                                                return (
+                                                    <button
+                                                        key={`${track.path}-${i}`}
+                                                        onClick={() => playTrack(globalIdx)}
+                                                        className={`w-full flex items-center gap-4 px-6 py-3 hover:bg-white/5 transition-all text-left border-b border-border/50 last:border-0 ${isActive ? 'bg-primary/10 text-primary' : ''}`}
+                                                    >
+                                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                                                            {isActive ? <Play className="w-4 h-4 fill-current" /> : globalIdx + 1}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="font-medium truncate text-sm">{track.name.split('/').pop()}</div>
+                                                            <div className="text-[10px] opacity-40 font-mono truncate mt-0.5">{track.path}</div>
+                                                        </div>
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </section>
+                                ))
+                            ) : (
+                                <div className="h-[60vh] flex flex-col items-center justify-center text-muted-foreground">
+                                    <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-6">
+                                        <ListMusic className="w-10 h-10 opacity-20" />
+                                    </div>
+                                    <p className="text-lg font-medium text-foreground">再生キューは空です</p>
+                                    <p className="text-sm">作品を選択して再生を開始してください。</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
-                {/* Player Bar */}
-                <footer className="h-28 bg-card/60 backdrop-blur-2xl border-t border-border/50 flex items-center px-8 gap-12 sticky bottom-0 z-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
-                    <div className="flex items-center gap-4 w-[28rem] shrink-0">
-                        <div className="w-20 h-20 bg-muted rounded-xl shrink-0 overflow-hidden shadow-2xl relative group">
-                            {currentWork?.thumbnail_path ? (
-                                <img
-                                    src={`resonate-img://${encodePathForProtocol(currentWork.thumbnail_path)}`}
-                                    className="w-full h-full object-cover"
-                                />
-                            ) : (
-                                <Music2 className="w-full h-full p-5 text-muted-foreground opacity-20" />
-                            )}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <button className="text-white hover:scale-110 transition-transform"><Search className="w-6 h-6" /></button>
-                            </div>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <div className="font-bold truncate text-sm hover:text-primary cursor-pointer transition-colors">
-                                {currentIndex >= 0 && playlist[currentIndex] ? playlist[currentIndex].name : '再生停止中'}
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate mt-1">
-                                {currentWork?.title || '作品を選択して再生を開始してください'}
-                            </div>
-                            <div className="text-[10px] text-primary font-bold mt-1 uppercase tracking-tighter opacity-70">
-                                {currentWork?.circle_name || ''}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 flex flex-col items-center gap-3">
-                        <div className="flex items-center gap-8">
-                            <button onClick={prev} className="text-muted-foreground hover:text-foreground transition-all hover:scale-110 active:scale-95">
-                                <SkipBack className="w-5 h-5 fill-current" />
-                            </button>
+                {/* Player Bar - hidden when mini player is open */}
+                {!showMiniPlayer && (
+                    <footer className="h-28 bg-card/60 backdrop-blur-2xl border-t border-border/50 flex items-center px-8 gap-12 sticky bottom-0 z-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+                        <div className="flex items-center gap-4 w-[28rem] shrink-0">
                             <button
-                                onClick={togglePlay}
-                                className="w-14 h-14 bg-primary text-primary-foreground rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/30"
+                                onClick={() => setShowMiniPlayer(true)}
+                                className="w-20 h-20 bg-muted rounded-xl shrink-0 overflow-hidden shadow-2xl relative group"
                             >
-                                {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current translate-x-0.5" />}
+                                {currentWork?.thumbnail_path ? (
+                                    <img
+                                        src={`resonate-img://${encodePathForProtocol(currentWork.thumbnail_path)}`}
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <Music2 className="w-full h-full p-5 text-muted-foreground opacity-20" />
+                                )}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                    <Search className="w-6 h-6 text-white" />
+                                </div>
                             </button>
-                            <button onClick={next} className="text-muted-foreground hover:text-foreground transition-all hover:scale-110 active:scale-95">
-                                <SkipForward className="w-5 h-5 fill-current" />
-                            </button>
-                        </div>
-                        <div className="w-full max-w-2xl flex items-center gap-4 text-[11px] font-mono text-muted-foreground">
-                            <span className="w-10 text-right">{formatTime(progress)}</span>
-                            <div className="flex-1 h-2 bg-muted/50 rounded-full overflow-hidden cursor-pointer relative group shadow-inner">
-                                <input
-                                    type="range"
-                                    min={0}
-                                    max={duration || 100}
-                                    value={progress}
-                                    onChange={(e) => seek(parseFloat(e.target.value))}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                />
-                                <div
-                                    className="h-full bg-primary relative transition-[width] duration-300 shadow-[0_0_10px_rgba(var(--primary),0.5)]"
-                                    style={{ width: `${(progress / (duration || 1)) * 100}%` }}
-                                >
-                                    <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg scale-0 group-hover:scale-100 transition-transform"></div>
+                            <div className="min-w-0 flex-1">
+                                <div className="font-bold truncate text-sm hover:text-primary cursor-pointer transition-colors">
+                                    {currentIndex >= 0 && playlist[currentIndex] ? playlist[currentIndex].name : '再生停止中'}
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate mt-1">
+                                    {currentWork?.title || '作品を選択して再生を開始してください'}
+                                </div>
+                                <div className="text-[10px] text-primary font-bold mt-1 uppercase tracking-tighter opacity-70">
+                                    {currentWork?.circle_name || ''}
                                 </div>
                             </div>
-                            <span className="w-10">{formatTime(duration)}</span>
                         </div>
-                    </div>
 
-                    <div className="w-[28rem] flex justify-end items-center gap-6">
-                        <div className="flex flex-col items-end gap-1">
-                            {sleepTimerType !== 'off' && (
-                                <span className="text-[10px] font-mono text-primary animate-pulse">
-                                    タイマー: {sleepTimerRemaining ? formatTime(sleepTimerRemaining) : 'トラック終了時'}
-                                </span>
-                            )}
-                            <div className="flex bg-muted/30 p-1 rounded-lg border border-border/50">
-                                {(['off', '30', 'end'] as const).map((type) => (
-                                    <button
-                                        key={type}
-                                        onClick={() => setSleepTimer(type)}
-                                        className={`px-2 py-1 text-[10px] rounded-md transition-all ${sleepTimerType === type ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-                                    >
-                                        {type === 'off' ? 'OFF' : type === 'end' ? '終了時' : '30分'}
-                                    </button>
-                                ))}
-                                <button className="px-2 py-1 text-muted-foreground hover:text-foreground">
-                                    <Moon className={`w-3 h-3 ${sleepTimerType !== 'off' ? 'text-primary' : ''}`} />
+                        <div className="flex-1 flex flex-col items-center gap-3">
+                            <div className="flex items-center gap-8">
+                                <button onClick={prev} className="text-muted-foreground hover:text-foreground transition-all hover:scale-110 active:scale-95">
+                                    <SkipBack className="w-5 h-5 fill-current" />
+                                </button>
+                                <button
+                                    onClick={togglePlay}
+                                    className="w-14 h-14 bg-primary text-primary-foreground rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl shadow-primary/30"
+                                >
+                                    {isPlaying ? <Pause className="w-6 h-6 fill-current" /> : <Play className="w-6 h-6 fill-current translate-x-0.5" />}
+                                </button>
+                                <button onClick={next} className="text-muted-foreground hover:text-foreground transition-all hover:scale-110 active:scale-95">
+                                    <SkipForward className="w-5 h-5 fill-current" />
                                 </button>
                             </div>
-                        </div>
-
-                        <div className="flex items-center gap-4 group w-32 shrink-0">
-                            <Volume2 className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                            <div className="flex-1 h-1.5 bg-muted rounded-full relative shadow-inner">
-                                <input
-                                    type="range"
-                                    min={0}
-                                    max={1}
-                                    step={0.01}
-                                    value={volume}
-                                    onChange={(e) => setVolume(parseFloat(e.target.value))}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                />
-                                <div
-                                    className="h-full bg-muted-foreground group-hover:bg-primary transition-all rounded-full"
-                                    style={{ width: `${volume * 100}%` }}
-                                ></div>
+                            <div className="w-full max-w-2xl flex items-center gap-4 text-[11px] font-mono text-muted-foreground">
+                                <span className="w-10 text-right">{formatTime(scrubProgress ?? progress)}</span>
+                                <div className="flex-1 h-2 bg-muted/50 rounded-full overflow-hidden cursor-pointer relative group shadow-inner">
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={duration || 100}
+                                        value={scrubProgress ?? progress}
+                                        onInput={(e) => setScrubProgress(parseFloat(e.currentTarget.value))}
+                                        onChange={(e) => {
+                                            const val = parseFloat(e.target.value)
+                                            seek(val)
+                                            setScrubProgress(null)
+                                        }}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                    />
+                                    <div
+                                        className={`h-full bg-primary relative shadow-[0_0_10px_rgba(var(--primary),0.5)] ${isSeeking || scrubProgress !== null ? '' : 'transition-[width] duration-300'}`}
+                                        style={{ width: `${((scrubProgress ?? progress) / (duration || 1)) * 100}%` }}
+                                    >
+                                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-lg scale-0 group-hover:scale-100 transition-transform"></div>
+                                    </div>
+                                </div>
+                                <span className="w-10">{formatTime(duration)}</span>
                             </div>
                         </div>
-                    </div>
-                    <button
-                        onClick={() => setActiveTab('settings')}
-                        className="p-2.5 hover:bg-accent rounded-xl transition-all hover:rotate-90 duration-500"
-                    >
-                        <Settings className="w-5 h-5 text-muted-foreground" />
-                    </button>
-                </footer>
+
+                        <div className="w-[28rem] flex justify-end items-center gap-6">
+                            <div className="flex flex-col items-end gap-1">
+                                {sleepTimerType !== 'off' && (
+                                    <span className="text-[10px] font-mono text-primary animate-pulse">
+                                        タイマー: {sleepTimerRemaining ? formatTime(sleepTimerRemaining) : 'トラック終了時'}
+                                    </span>
+                                )}
+                                <div className="flex bg-muted/30 p-1 rounded-lg border border-border/50">
+                                    {(['off', '30', 'end'] as const).map((type) => (
+                                        <button
+                                            key={type}
+                                            onClick={() => setSleepTimer(type)}
+                                            className={`px-2 py-1 text-[10px] rounded-md transition-all ${sleepTimerType === type ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                        >
+                                            {type === 'off' ? 'OFF' : type === 'end' ? '終了時' : '30分'}
+                                        </button>
+                                    ))}
+                                    <button className="px-2 py-1 text-muted-foreground hover:text-foreground">
+                                        <Moon className={`w-3 h-3 ${sleepTimerType !== 'off' ? 'text-primary' : ''}`} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-4 group w-32 shrink-0">
+                                <Volume2 className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                <div className="flex-1 h-1.5 bg-muted rounded-full relative shadow-inner">
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={1}
+                                        step={0.01}
+                                        value={volume}
+                                        onChange={(e) => setVolume(parseFloat(e.target.value))}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                    />
+                                    <div
+                                        className="h-full bg-muted-foreground group-hover:bg-primary transition-all rounded-full"
+                                        style={{ width: `${volume * 100}%` }}
+                                    ></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setActiveTab('settings')}
+                            className="p-2.5 hover:bg-accent rounded-xl transition-all hover:rotate-90 duration-500"
+                        >
+                            <Settings className="w-5 h-5 text-muted-foreground" />
+                        </button>
+                    </footer>
+                )}
             </main>
 
             {/* Filter Dialog */}
@@ -458,6 +523,11 @@ function App() {
                     works={works}
                     onClose={() => setIsFilterOpen(false)}
                 />
+            )}
+
+            {/* Mini Player */}
+            {showMiniPlayer && currentWork && (
+                <MiniPlayer onClose={() => setShowMiniPlayer(false)} />
             )}
         </div>
     )

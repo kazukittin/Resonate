@@ -75,20 +75,16 @@ app.whenReady().then(async () => {
         }
     })
 
-    // Register protocol for local audio (supports streaming/seeking)
+    // Register protocol for local audio (supports streaming/seeking with Range requests)
     protocol.handle('resonate-audio', async (request) => {
         try {
             let rawPath = request.url.substring('resonate-audio://'.length)
-
-            console.log('[Protocol] Raw URL path:', rawPath)
 
             if (process.platform === 'win32' && /^[a-zA-Z]\//.test(rawPath)) {
                 rawPath = rawPath[0].toUpperCase() + ':' + rawPath.substring(1)
             }
 
             const filePath = decodeURIComponent(rawPath)
-
-            console.log('[Protocol] Decoded file path:', filePath)
 
             // Check if file exists
             const fs = require('fs')
@@ -97,10 +93,88 @@ app.whenReady().then(async () => {
                 return new Response('File not found', { status: 404 })
             }
 
-            return net.fetch(pathToFileURL(filePath).toString(), {
-                bypassCustomProtocolHandlers: true,
-                method: request.method,
-                headers: request.headers
+            const stat = fs.statSync(filePath)
+            const fileSize = stat.size
+            const mimeType = filePath.endsWith('.m4a') ? 'audio/mp4'
+                : filePath.endsWith('.mp3') ? 'audio/mpeg'
+                    : filePath.endsWith('.wav') ? 'audio/wav'
+                        : filePath.endsWith('.flac') ? 'audio/flac'
+                            : filePath.endsWith('.ogg') ? 'audio/ogg'
+                                : 'audio/mpeg'
+
+            // Check for Range header
+            const rangeHeader = request.headers.get('Range')
+
+            if (rangeHeader) {
+                // Parse range header: "bytes=start-end" or "bytes=start-"
+                const match = rangeHeader.match(/bytes=(\d+)-(\d*)/)
+                if (match) {
+                    const start = parseInt(match[1], 10)
+                    const end = match[2] ? parseInt(match[2], 10) : fileSize - 1
+                    const chunkSize = end - start + 1
+
+                    console.log('[Protocol] Range request:', { start, end, chunkSize, fileSize })
+
+                    // Create a readable stream for the requested range
+                    const stream = fs.createReadStream(filePath, { start, end })
+
+                    // Convert Node stream to Web ReadableStream
+                    const webStream = new ReadableStream({
+                        start(controller) {
+                            stream.on('data', (chunk: Buffer) => {
+                                controller.enqueue(new Uint8Array(chunk))
+                            })
+                            stream.on('end', () => {
+                                controller.close()
+                            })
+                            stream.on('error', (err: Error) => {
+                                controller.error(err)
+                            })
+                        },
+                        cancel() {
+                            stream.destroy()
+                        }
+                    })
+
+                    return new Response(webStream, {
+                        status: 206,
+                        headers: {
+                            'Content-Type': mimeType,
+                            'Content-Length': String(chunkSize),
+                            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                            'Accept-Ranges': 'bytes'
+                        }
+                    })
+                }
+            }
+
+            // No range requested, return full file
+            console.log('[Protocol] Full file request:', filePath)
+            const stream = fs.createReadStream(filePath)
+            const webStream = new ReadableStream({
+                start(controller) {
+                    stream.on('data', (chunk: Buffer) => {
+                        controller.enqueue(new Uint8Array(chunk))
+                    })
+                    stream.on('end', () => {
+                        controller.close()
+                    })
+                    stream.on('error', (err: Error) => {
+                        controller.error(err)
+                    })
+                },
+                cancel() {
+                    stream.destroy()
+                }
+            })
+
+            return new Response(webStream, {
+                status: 200,
+                headers: {
+                    'Content-Type': mimeType,
+                    'Content-Length': String(fileSize),
+                    'Accept-Ranges': 'bytes'
+                }
             })
         } catch (err) {
             console.error('[Protocol] resonate-audio error:', err, request.url)

@@ -1,20 +1,21 @@
 import React, { useState } from 'react'
-import { Music2, Edit2, Play, List } from 'lucide-react'
+import { Music2, Edit2, Play } from 'lucide-react'
 import type { Work } from '../../../common/types'
 import { EditWorkDialog } from './EditWorkDialog'
-import { TrackListDialog } from './TrackListDialog'
+import { WorkDetail } from './WorkDetail'
 import { useSearchStore } from '../store/search'
+import { usePlayerStore } from '../store/player'
 import { encodePathForProtocol } from '../utils/pathUtils'
 
 interface WorkCardProps {
     work: Work
-    onClick?: () => void
 }
 
-export function WorkCard({ work, onClick }: WorkCardProps) {
+export function WorkCard({ work }: WorkCardProps) {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-    const [isTrackListOpen, setIsTrackListOpen] = useState(false)
+    const [isDetailOpen, setIsDetailOpen] = useState(false)
     const { setSearchQuery } = useSearchStore()
+    const { playWork } = usePlayerStore()
 
     const thumbnailSrc = work.thumbnail_path
         ? `resonate-img://${encodePathForProtocol(work.thumbnail_path)}`
@@ -30,6 +31,11 @@ export function WorkCard({ work, onClick }: WorkCardProps) {
         setSearchQuery(query)
     }
 
+    const handlePlayClick = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        playWork(work)
+    }
+
     // Parse tags and CVs
     const tags = work.tags?.split(',').map(t => t.trim()).filter(Boolean) || []
     const cvList = work.cv_names?.split(/[,、/／]/).map(cv => cv.trim()).filter(Boolean) || []
@@ -37,7 +43,7 @@ export function WorkCard({ work, onClick }: WorkCardProps) {
     return (
         <>
             <div
-                onClick={onClick}
+                onClick={() => setIsDetailOpen(true)}
                 className="group relative bg-card rounded-xl border border-border overflow-hidden hover:border-primary/50 transition-all hover:shadow-2xl hover:shadow-primary/10 cursor-pointer"
             >
                 <div className="aspect-[3/4] bg-muted relative overflow-hidden flex items-center justify-center">
@@ -51,25 +57,18 @@ export function WorkCard({ work, onClick }: WorkCardProps) {
                         <Music2 className="w-16 h-16 text-muted-foreground opacity-20 group-hover:scale-110 transition-transform" />
                     )}
 
-                    {/* Hover Overlay */}
+                    {/* Hover Overlay with Play Button */}
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                        <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-primary-foreground shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform">
+                        <button
+                            onClick={handlePlayClick}
+                            className="w-12 h-12 bg-primary rounded-full flex items-center justify-center text-primary-foreground shadow-lg transform translate-y-4 group-hover:translate-y-0 transition-transform hover:scale-110"
+                        >
                             <Play className="w-6 h-6 fill-current translate-x-0.5" />
-                        </div>
+                        </button>
                     </div>
 
                     {/* Buttons - Visible on Hover */}
                     <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                setIsTrackListOpen(true)
-                            }}
-                            className="p-2 bg-black/60 backdrop-blur-md rounded-lg text-white hover:bg-primary transition-colors"
-                            title="トラック一覧"
-                        >
-                            <List className="w-4 h-4" />
-                        </button>
                         <button
                             onClick={handleEditClick}
                             className="p-2 bg-black/60 backdrop-blur-md rounded-lg text-white hover:bg-primary transition-colors"
@@ -144,10 +143,10 @@ export function WorkCard({ work, onClick }: WorkCardProps) {
                 onClose={() => setIsEditDialogOpen(false)}
             />
 
-            {isTrackListOpen && (
-                <TrackListDialog
+            {isDetailOpen && (
+                <WorkDetail
                     work={work}
-                    onClose={() => setIsTrackListOpen(false)}
+                    onClose={() => setIsDetailOpen(false)}
                 />
             )}
         </>
