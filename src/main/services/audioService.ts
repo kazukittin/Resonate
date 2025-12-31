@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 
-const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.flac', '.ogg']
+const AUDIO_EXTENSIONS = ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac']
 
 // Recursively get all audio files from a directory and its subdirectories
 export async function getAudioFiles(dirPath: string): Promise<{ name: string; path: string }[]> {

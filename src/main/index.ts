@@ -163,6 +163,42 @@ app.whenReady().then(async () => {
         return await resetDatabase()
     })
 
+    // Playlist handlers
+    ipcMain.handle('playlist:create', async (_, name: string) => {
+        const { createPlaylist } = await import('./services/playlistService')
+        return await createPlaylist(name)
+    })
+
+    ipcMain.handle('playlist:getAll', async () => {
+        const { getPlaylistWithTrackCount } = await import('./services/playlistService')
+        return await getPlaylistWithTrackCount()
+    })
+
+    ipcMain.handle('playlist:getTracks', async (_, playlistId: number) => {
+        const { getPlaylistTracks } = await import('./services/playlistService')
+        return await getPlaylistTracks(playlistId)
+    })
+
+    ipcMain.handle('playlist:addTrack', async (_, playlistId: number, trackPath: string, trackName: string, workId: string | null) => {
+        const { addTrackToPlaylist } = await import('./services/playlistService')
+        return await addTrackToPlaylist(playlistId, trackPath, trackName, workId)
+    })
+
+    ipcMain.handle('playlist:removeTrack', async (_, trackId: number) => {
+        const { removeTrackFromPlaylist } = await import('./services/playlistService')
+        return await removeTrackFromPlaylist(trackId)
+    })
+
+    ipcMain.handle('playlist:delete', async (_, id: number) => {
+        const { deletePlaylist } = await import('./services/playlistService')
+        return await deletePlaylist(id)
+    })
+
+    ipcMain.handle('playlist:rename', async (_, id: number, newName: string) => {
+        const { renamePlaylist } = await import('./services/playlistService')
+        return await renamePlaylist(id, newName)
+    })
+
     app.on('browser-window-created', (_, window) => {
         optimizer.watchWindowShortcuts(window)
     })

@@ -21,6 +21,7 @@ interface PlayerState {
 
     // Actions
     playWork: (work: Work) => Promise<void>
+    playWorkFromTrack: (work: Work, trackIndex: number) => Promise<void>
     playTrack: (index: number) => void
     togglePlay: () => void
     seek: (seconds: number) => void
@@ -72,6 +73,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         }
     },
 
+    playWorkFromTrack: async (work: Work, trackIndex: number) => {
+        // 1. Get audio files
+        const tracks = await window.api.getAudioFiles(work.local_path)
+        if (tracks.length === 0) return
+
+        // Ensure trackIndex is valid
+        const startIndex = Math.min(Math.max(0, trackIndex), tracks.length - 1)
+
+        set({ currentWork: work, playlist: tracks, currentIndex: startIndex })
+        get().playTrack(startIndex)
+    },
+
     playTrack: (index: number) => {
         const { playlist, howl: oldHowl, volume, currentWork } = get()
         const track = playlist[index]
@@ -100,9 +113,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         const audioUrl = `resonate-audio://${encodePath(track.path)}`
         const format = track.path.split('.').pop()?.toLowerCase() || 'mp3'
 
-        // Use Web Audio API (html5: false) for MP3 to get accurate duration
+        // Use Web Audio API (html5: false) for MP3 and WAV to get accurate duration
         // Use HTML5 mode for other formats (m4a, flac, etc.) for streaming support
-        const useHtml5 = format !== 'mp3'
+        const useHtml5 = format !== 'mp3' && format !== 'wav'
 
         console.log('[Player] Loading audio:', audioUrl, 'format:', format, 'html5:', useHtml5)
 

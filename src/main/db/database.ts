@@ -42,6 +42,29 @@ export async function initDatabase() {
         .addColumn('updated_at', 'text', (col) => col.defaultTo('CURRENT_TIMESTAMP'))
         .execute()
 
+    // Create playlists table
+    await db.schema
+        .createTable('playlists')
+        .ifNotExists()
+        .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+        .addColumn('name', 'text', (col) => col.notNull())
+        .addColumn('created_at', 'text', (col) => col.defaultTo('CURRENT_TIMESTAMP'))
+        .addColumn('updated_at', 'text', (col) => col.defaultTo('CURRENT_TIMESTAMP'))
+        .execute()
+
+    // Create playlist_tracks table
+    await db.schema
+        .createTable('playlist_tracks')
+        .ifNotExists()
+        .addColumn('id', 'integer', (col) => col.primaryKey().autoIncrement())
+        .addColumn('playlist_id', 'integer', (col) => col.notNull().references('playlists.id').onDelete('cascade'))
+        .addColumn('track_path', 'text', (col) => col.notNull())
+        .addColumn('track_name', 'text', (col) => col.notNull())
+        .addColumn('work_id', 'text')
+        .addColumn('position', 'integer', (col) => col.notNull())
+        .addColumn('added_at', 'text', (col) => col.defaultTo('CURRENT_TIMESTAMP'))
+        .execute()
+
     console.log(`[DB] Database initialized at: ${dbPath}`)
 }
 

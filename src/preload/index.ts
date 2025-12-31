@@ -14,6 +14,22 @@ const api = {
     selectFile: () => ipcRenderer.invoke('select-file'),
     resetDatabase: () => ipcRenderer.invoke('reset-database'),
     startScraping: () => ipcRenderer.invoke('start-scraping'),
+
+    // Playlist APIs
+    createPlaylist: (name: string) => ipcRenderer.invoke('playlist:create', name),
+    getAllPlaylists: () => ipcRenderer.invoke('playlist:getAll'),
+    getPlaylistTracks: (playlistId: number) => ipcRenderer.invoke('playlist:getTracks', playlistId),
+    addTrackToPlaylist: (playlistId: number, trackPath: string, trackName: string, workId: string | null) =>
+        ipcRenderer.invoke('playlist:addTrack', playlistId, trackPath, trackName, workId),
+    removeTrackFromPlaylist: (trackId: number) => ipcRenderer.invoke('playlist:removeTrack', trackId),
+    deletePlaylist: (id: number) => ipcRenderer.invoke('playlist:delete', id),
+    renamePlaylist: (id: number, newName: string) => ipcRenderer.invoke('playlist:rename', id, newName),
+
+    // Event listeners
+    onWorkUpdated: (callback: (workId: string) => void) => {
+        ipcRenderer.on('work-updated', (_, workId) => callback(workId))
+        return () => ipcRenderer.removeAllListeners('work-updated')
+    },
 }
 
 if (process.contextIsolated) {

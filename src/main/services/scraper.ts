@@ -1,11 +1,18 @@
 import axios from 'axios'
 import * as cheerio from 'cheerio'
+import { BrowserWindow } from 'electron'
 import { downloadThumbnail } from '../utils/downloader'
 import { db } from '../db/database'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export async function scrapeWorkMetadata(rjCode: string) {
+    // Skip if not a valid RJ code
+    if (!/^RJ[0-9]{6,8}$/i.test(rjCode)) {
+        console.log(`[Scraper] Skipping ${rjCode}: not a valid RJ code`)
+        return
+    }
+
     const url = `https://www.dlsite.com/maniax/work/=/product_id/${rjCode}.html`
 
     try {
@@ -26,7 +33,7 @@ export async function scrapeWorkMetadata(rjCode: string) {
         const cvRow = $('#work_outline th:contains("声優")').next('td').text().trim()
 
         const thumbnailURL = $('meta[property="og:image"]').attr('content')
-        let localThumbnailPath = null
+        let localThumbnailPath: string | null = null
 
         if (thumbnailURL) {
             localThumbnailPath = await downloadThumbnail(rjCode, thumbnailURL)
@@ -45,6 +52,12 @@ export async function scrapeWorkMetadata(rjCode: string) {
             .execute()
 
         console.log(`[Scraper] Successfully updated ${rjCode}`)
+
+        // Notify renderer to refresh data
+        const windows = BrowserWindow.getAllWindows()
+        windows.forEach(win => {
+            win.webContents.send('work-updated', rjCode)
+        })
 
     } catch (error) {
         console.error(`[Scraper] Failed to scrape ${rjCode}:`, error)

@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { Music2, Edit2, Play } from 'lucide-react'
+import { Music2, Edit2, Play, List } from 'lucide-react'
 import type { Work } from '../../../common/types'
 import { EditWorkDialog } from './EditWorkDialog'
+import { TrackListDialog } from './TrackListDialog'
 
 interface WorkCardProps {
     work: Work
@@ -11,6 +12,7 @@ import { encodePathForProtocol } from '../utils/pathUtils'
 
 export function WorkCard({ work, onClick }: WorkCardProps) {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+    const [isTrackListOpen, setIsTrackListOpen] = useState(false)
 
     const thumbnailSrc = work.thumbnail_path
         ? `resonate-img://${encodePathForProtocol(work.thumbnail_path)}`
@@ -32,7 +34,7 @@ export function WorkCard({ work, onClick }: WorkCardProps) {
                         <img
                             src={thumbnailSrc}
                             alt={work.title || work.id}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
                         />
                     ) : (
                         <Music2 className="w-16 h-16 text-muted-foreground opacity-20 group-hover:scale-110 transition-transform" />
@@ -45,13 +47,26 @@ export function WorkCard({ work, onClick }: WorkCardProps) {
                         </div>
                     </div>
 
-                    {/* Edit Button - Visible on Hover */}
-                    <button
-                        onClick={handleEditClick}
-                        className="absolute top-3 right-3 p-2 bg-black/60 backdrop-blur-md rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary"
-                    >
-                        <Edit2 className="w-4 h-4" />
-                    </button>
+                    {/* Buttons - Visible on Hover */}
+                    <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                setIsTrackListOpen(true)
+                            }}
+                            className="p-2 bg-black/60 backdrop-blur-md rounded-lg text-white hover:bg-primary transition-colors"
+                            title="トラック一覧"
+                        >
+                            <List className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={handleEditClick}
+                            className="p-2 bg-black/60 backdrop-blur-md rounded-lg text-white hover:bg-primary transition-colors"
+                            title="編集"
+                        >
+                            <Edit2 className="w-4 h-4" />
+                        </button>
+                    </div>
 
                     <div className="absolute bottom-3 left-3 px-2 py-0.5 bg-black/60 backdrop-blur-md rounded text-[10px] text-white font-mono opacity-0 group-hover:opacity-100 transition-opacity">
                         {work.id}
@@ -79,6 +94,13 @@ export function WorkCard({ work, onClick }: WorkCardProps) {
                 isOpen={isEditDialogOpen}
                 onClose={() => setIsEditDialogOpen(false)}
             />
+
+            {isTrackListOpen && (
+                <TrackListDialog
+                    work={work}
+                    onClose={() => setIsTrackListOpen(false)}
+                />
+            )}
         </>
     )
 }
