@@ -32,6 +32,13 @@ export async function scrapeWorkMetadata(rjCode: string) {
         // CV extract (can be multiple)
         const cvRow = $('#work_outline th:contains("声優")').next('td').text().trim()
 
+        // Extract genre tags
+        const tags: string[] = []
+        $('.main_genre a').each((_, el) => {
+            const tag = $(el).text().trim()
+            if (tag) tags.push(tag)
+        })
+
         const thumbnailURL = $('meta[property="og:image"]').attr('content')
         let localThumbnailPath: string | null = null
 
@@ -46,6 +53,7 @@ export async function scrapeWorkMetadata(rjCode: string) {
                 title,
                 circle_name: circleName,
                 cv_names: cvRow || null,
+                tags: tags.length > 0 ? tags.join(',') : null,
                 thumbnail_path: localThumbnailPath
             })
             .where('id', '=', rjCode)

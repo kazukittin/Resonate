@@ -24,12 +24,20 @@ export async function initDatabase() {
         .addColumn('title', 'text')
         .addColumn('circle_name', 'text')
         .addColumn('cv_names', 'text')
+        .addColumn('tags', 'text')
         .addColumn('description', 'text')
         .addColumn('thumbnail_path', 'text')
         .addColumn('local_path', 'text', (col) => col.notNull())
         .addColumn('last_played_at', 'text')
         .addColumn('created_at', 'text', (col) => col.defaultTo('CURRENT_TIMESTAMP'))
         .execute()
+
+    // Add tags column to existing table if it doesn't exist
+    try {
+        await db.schema.alterTable('works').addColumn('tags', 'text').execute()
+    } catch {
+        // Column already exists
+    }
 
     // Create play_history table
     await db.schema

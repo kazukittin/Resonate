@@ -4,7 +4,8 @@ export interface WorksTable {
     id: string // RJ-code or folder name
     title: string | null
     circle_name: string | null
-    cv_names: string | null // Comma separated or JSON string
+    cv_names: string | null // Comma separated
+    tags: string | null // Comma separated
     description: string | null
     thumbnail_path: string | null
     local_path: string

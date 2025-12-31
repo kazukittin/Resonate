@@ -3,6 +3,7 @@ export interface Work {
     title: string | null
     circle_name: string | null
     cv_names: string | null
+    tags: string | null
     description: string | null
     thumbnail_path: string | null
     local_path: string
