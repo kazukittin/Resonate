@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Disc3, Music2, Settings, ListMusic, FolderOpen, RefreshCw, Search, Play, Pause, SkipBack, SkipForward, Volume2, Moon, ArrowUpDown, Trash2, Filter } from 'lucide-react'
+import { Disc3, Music2, Settings, ListMusic, FolderOpen, RefreshCw, Search, Play, Pause, SkipBack, SkipForward, Volume2, Moon, Sun, ArrowUpDown, Trash2, Filter } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSettingsStore } from './store/settings'
 import { usePlayerStore } from './store/player'
@@ -10,6 +10,7 @@ import { FilterDialog } from './components/FilterDialog'
 import { MiniPlayer } from './components/MiniPlayer'
 import { SortOption } from '../../common/types'
 import { encodePathForProtocol } from './utils/pathUtils'
+import { useThemeStore } from './store/theme'
 
 const formatTime = (seconds: number) => {
     // Handle invalid values (Infinity, NaN, negative)
@@ -33,6 +34,7 @@ function App() {
     const queryClient = useQueryClient()
     const [scrubProgress, setScrubProgress] = useState<number | null>(null)
     const [showMiniPlayer, setShowMiniPlayer] = useState(false)
+    const { theme, toggleTheme } = useThemeStore()
 
     // Player state
     const {
@@ -144,43 +146,62 @@ function App() {
 
     return (
         <div className="flex h-screen w-full overflow-hidden bg-background text-foreground font-sans">
-            {/* Sidebar */}
-            <aside className="w-64 border-r border-border bg-card/30 flex flex-col">
-                <div className="p-6">
-                    <h1 className="text-2xl font-bold tracking-tight text-primary flex items-center gap-2">
+            {/* Sidebar - Icon Only */}
+            <aside className="w-16 border-r border-border bg-card/30 flex flex-col">
+                <div className="p-4 flex items-center justify-center">
+                    <h1 className="text-2xl font-bold tracking-tight text-primary flex items-center justify-center">
                         <Music2 className="w-8 h-8" />
-                        Resonate
                     </h1>
                 </div>
 
-                <nav className="flex-1 px-4 space-y-1">
+                <nav className="flex-1 px-2 space-y-1">
                     <button
                         onClick={() => setActiveTab('library')}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${activeTab === 'library' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                        className={`w-full flex items-center justify-center px-2 py-2 rounded-lg transition-all ${activeTab === 'library' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                        title="ライブラリ"
                     >
                         <Disc3 className="w-5 h-5" />
-                        ライブラリ
                     </button>
                     <button
                         onClick={() => setActiveTab('playlists')}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${activeTab === 'playlists' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                        className={`w-full flex items-center justify-center px-2 py-2 rounded-lg transition-all ${activeTab === 'playlists' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                        title="プレイリスト"
                     >
                         <ListMusic className="w-5 h-5" />
-                        プレイリスト
                     </button>
                     <button
                         onClick={() => setActiveTab('queue')}
-                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all ${activeTab === 'queue' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                        className={`w-full flex items-center justify-center px-2 py-2 rounded-lg transition-all relative ${activeTab === 'queue' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                        title="再生キュー"
                     >
                         <Play className="w-5 h-5" />
-                        再生キュー
                         {playlist.length > 0 && (
-                            <span className="ml-auto text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-bold">
+                            <span className="text-xs bg-primary/20 text-primary px-1.5 py-0.5 rounded-full font-bold absolute -top-1 -right-1">
                                 {playlist.length}
                             </span>
                         )}
                     </button>
                 </nav>
+
+                {/* Bottom buttons */}
+                <div className="px-2 pb-4 space-y-1">
+                    {/* Theme Toggle */}
+                    <button
+                        onClick={toggleTheme}
+                        className="w-full flex items-center justify-center px-2 py-2 rounded-lg transition-all text-muted-foreground hover:bg-accent hover:text-foreground"
+                        title={theme === 'dark' ? 'ライトモード' : 'ダークモード'}
+                    >
+                        {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                    </button>
+                    {/* Settings */}
+                    <button
+                        onClick={() => setActiveTab('settings')}
+                        className={`w-full flex items-center justify-center px-2 py-2 rounded-lg transition-all ${activeTab === 'settings' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                        title="設定"
+                    >
+                        <Settings className="w-5 h-5" />
+                    </button>
+                </div>
             </aside>
 
             {/* Main Content */}
@@ -392,9 +413,9 @@ function App() {
 
                 {/* Player Bar - hidden when mini player is open */}
                 {!showMiniPlayer && (
-                    <footer className="h-28 bg-card/60 backdrop-blur-2xl border-t border-border/50 flex items-center px-6 gap-6 sticky bottom-0 z-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
-                        {/* Track Info - flexible width */}
-                        <div className="flex items-center gap-4 flex-1 min-w-0 max-w-md">
+                    <footer className="h-28 shrink-0 bg-card/60 backdrop-blur-2xl border-t border-border/50 flex items-center px-6 z-10 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+                        {/* Track Info - left section */}
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
                             <button
                                 onClick={() => setShowMiniPlayer(true)}
                                 className="w-20 h-20 bg-muted rounded-xl shrink-0 overflow-hidden shadow-2xl relative group"
@@ -425,7 +446,7 @@ function App() {
                         </div>
 
                         {/* Playback Controls - centered */}
-                        <div className="flex-1 flex flex-col items-center gap-2 max-w-2xl">
+                        <div className="flex-1 flex flex-col items-center justify-center gap-2 px-4">
                             <div className="flex items-center gap-6">
                                 <button onClick={prev} className="text-muted-foreground hover:text-foreground transition-all hover:scale-110 active:scale-95">
                                     <SkipBack className="w-5 h-5 fill-current" />
@@ -467,8 +488,8 @@ function App() {
                             </div>
                         </div>
 
-                        {/* Right Controls - compact */}
-                        <div className="flex items-center gap-4 shrink-0">
+                        {/* Right Controls - right section */}
+                        <div className="flex-1 flex items-center justify-end gap-4">
                             <div className="flex flex-col items-end gap-1">
                                 {sleepTimerType !== 'off' && (
                                     <span className="text-[10px] font-mono text-primary animate-pulse">

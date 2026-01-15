@@ -3,7 +3,7 @@ import { Music2, Edit2, Play } from 'lucide-react'
 import type { Work } from '../../../common/types'
 import { EditWorkDialog } from './EditWorkDialog'
 import { WorkDetail } from './WorkDetail'
-import { useSearchStore } from '../store/search'
+import { useSearchStore, type FilterOptions } from '../store/search'
 import { usePlayerStore } from '../store/player'
 import { encodePathForProtocol } from '../utils/pathUtils'
 
@@ -14,7 +14,7 @@ interface WorkCardProps {
 export function WorkCard({ work }: WorkCardProps) {
     const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
     const [isDetailOpen, setIsDetailOpen] = useState(false)
-    const { setSearchQuery } = useSearchStore()
+    const { setSearchQuery, filters, setFilters } = useSearchStore()
     const { playWork } = usePlayerStore()
 
     const thumbnailSrc = work.thumbnail_path
@@ -26,9 +26,20 @@ export function WorkCard({ work }: WorkCardProps) {
         setIsEditDialogOpen(true)
     }
 
-    const handleTagClick = (e: React.MouseEvent, query: string) => {
+    const handleCvClick = (e: React.MouseEvent, cv: string) => {
         e.stopPropagation()
-        setSearchQuery(query)
+        // Add CV to filter if not already present
+        if (!filters.cvs.includes(cv)) {
+            setFilters({ ...filters, cvs: [...filters.cvs, cv] })
+        }
+    }
+
+    const handleTagClick = (e: React.MouseEvent, tag: string) => {
+        e.stopPropagation()
+        // Add tag to filter if not already present
+        if (!filters.tags.includes(tag)) {
+            setFilters({ ...filters, tags: [...filters.tags, tag] })
+        }
     }
 
     const handlePlayClick = (e: React.MouseEvent) => {
@@ -46,12 +57,12 @@ export function WorkCard({ work }: WorkCardProps) {
                 onClick={() => setIsDetailOpen(true)}
                 className="group relative bg-card rounded-xl border border-border overflow-hidden hover:border-primary/50 transition-all hover:shadow-2xl hover:shadow-primary/10 cursor-pointer"
             >
-                <div className="aspect-[3/4] bg-muted relative overflow-hidden flex items-center justify-center">
+                <div className="min-h-[200px] max-h-[400px] bg-muted relative overflow-hidden flex items-center justify-center">
                     {thumbnailSrc ? (
                         <img
                             src={thumbnailSrc}
                             alt={work.title || work.id}
-                            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                            className="w-full h-auto max-h-[400px] object-contain group-hover:scale-105 transition-transform duration-500"
                         />
                     ) : (
                         <Music2 className="w-16 h-16 text-muted-foreground opacity-20 group-hover:scale-110 transition-transform" />
@@ -92,7 +103,10 @@ export function WorkCard({ work }: WorkCardProps) {
                     {/* Clickable Circle Name */}
                     {work.circle_name && (
                         <button
-                            onClick={(e) => handleTagClick(e, work.circle_name!)}
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                setSearchQuery(work.circle_name!)
+                            }}
                             className="text-xs text-muted-foreground italic hover:text-primary transition-colors truncate block w-full text-left"
                         >
                             {work.circle_name}
@@ -102,25 +116,22 @@ export function WorkCard({ work }: WorkCardProps) {
                     {/* CV Tags */}
                     {cvList.length > 0 && (
                         <div className="flex flex-wrap gap-1">
-                            {cvList.slice(0, 3).map((cv, i) => (
+                            {cvList.map((cv, i) => (
                                 <button
                                     key={i}
-                                    onClick={(e) => handleTagClick(e, cv)}
+                                    onClick={(e) => handleCvClick(e, cv)}
                                     className="text-[10px] px-1.5 py-0.5 bg-purple-500/10 text-purple-400 rounded hover:bg-purple-500/20 transition-colors truncate max-w-[80px]"
                                 >
                                     {cv}
                                 </button>
                             ))}
-                            {cvList.length > 3 && (
-                                <span className="text-[10px] text-muted-foreground/50">+{cvList.length - 3}</span>
-                            )}
                         </div>
                     )}
 
                     {/* Genre Tags */}
                     {tags.length > 0 && (
                         <div className="flex flex-wrap gap-1">
-                            {tags.slice(0, 4).map((tag, i) => (
+                            {tags.map((tag, i) => (
                                 <button
                                     key={i}
                                     onClick={(e) => handleTagClick(e, tag)}
@@ -129,9 +140,6 @@ export function WorkCard({ work }: WorkCardProps) {
                                     {tag}
                                 </button>
                             ))}
-                            {tags.length > 4 && (
-                                <span className="text-[10px] text-muted-foreground/50">+{tags.length - 4}</span>
-                            )}
                         </div>
                     )}
                 </div>
