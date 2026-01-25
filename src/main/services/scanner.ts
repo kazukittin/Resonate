@@ -56,6 +56,7 @@ export async function scanDirectory(rootPath: string) {
                         title: defaultTitle,
                         circle_name: null,
                         cv_names: null,
+                        tags: null,
                         description: null,
                         thumbnail_path: null,
                         local_path: fullPath,

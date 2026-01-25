@@ -36,15 +36,17 @@ export async function getAllWorks(options: GetWorksOptions = { sortBy: 'added_de
     return await query.execute()
 }
 
-export async function upsertWork(work: Omit<WorksTable, 'created_at'>) {
+export async function upsertWork(work: Omit<WorksTable, 'created_at' | 'scrape_status'>) {
     return await db
         .insertInto('works')
         .values({
             ...work,
+            scrape_status: 'pending'
         })
         .onConflict((oc) =>
             oc.column('id').doUpdateSet({
-                local_path: work.local_path,
+                local_path: work.local_path
+                // Do not reset scrape_status on re-scan to avoid loop if already checked
             })
         )
         .executeTakeFirst()

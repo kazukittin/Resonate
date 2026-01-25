@@ -11,6 +11,7 @@ export interface WorksTable {
     local_path: string
     last_played_at: string | null // ISO Date string
     created_at: Generated<string>
+    scrape_status: 'pending' | 'success' | 'not_found' | 'failed' | null
 }
 
 export interface PlayHistoryTable {

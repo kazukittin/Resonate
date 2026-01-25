@@ -30,14 +30,17 @@ export async function initDatabase() {
         .addColumn('local_path', 'text', (col) => col.notNull())
         .addColumn('last_played_at', 'text')
         .addColumn('created_at', 'text', (col) => col.defaultTo('CURRENT_TIMESTAMP'))
+        .addColumn('scrape_status', 'text', (col) => col.defaultTo('pending'))
         .execute()
 
-    // Add tags column to existing table if it doesn't exist
+    // Add columns to existing table if they don't exist
     try {
         await db.schema.alterTable('works').addColumn('tags', 'text').execute()
-    } catch {
-        // Column already exists
-    }
+    } catch { }
+
+    try {
+        await db.schema.alterTable('works').addColumn('scrape_status', 'text').execute()
+    } catch { }
 
     // Create play_history table
     await db.schema

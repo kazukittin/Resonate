@@ -192,7 +192,10 @@ app.whenReady().then(async () => {
     })
 
     ipcMain.handle('scan-directory', async (_, path: string) => {
-        return await scanDirectory(path)
+        const results = await scanDirectory(path)
+        // Start scraping in background for newly added works
+        scrapeMissingMetadata()
+        return results
     })
 
     ipcMain.handle('get-works', async (_, options) => {

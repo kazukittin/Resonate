@@ -54,7 +54,8 @@ export async function scrapeWorkMetadata(rjCode: string) {
                 circle_name: circleName,
                 cv_names: cvRow || null,
                 tags: tags.length > 0 ? tags.join(',') : null,
-                thumbnail_path: localThumbnailPath
+                thumbnail_path: localThumbnailPath,
+                scrape_status: 'success'
             })
             .where('id', '=', rjCode)
             .execute()
@@ -67,15 +68,40 @@ export async function scrapeWorkMetadata(rjCode: string) {
             win.webContents.send('work-updated', rjCode)
         })
 
-    } catch (error) {
-        console.error(`[Scraper] Failed to scrape ${rjCode}:`, error)
+    } catch (error: any) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+            console.log(`[Scraper] 404 Not Found for ${rjCode}. Marking as not_found.`)
+            await db
+                .updateTable('works')
+                .set({
+                    title: `[Not Found] ${rjCode}`,
+                    scrape_status: 'not_found'
+                })
+                .where('id', '=', rjCode)
+                .execute()
+        } else {
+            console.error(`[Scraper] Failed to scrape ${rjCode}:`, error)
+            await db
+                .updateTable('works')
+                .set({
+                    scrape_status: 'failed'
+                })
+                .where('id', '=', rjCode)
+                .execute()
+        }
     }
 }
 
 export async function scrapeMissingMetadata() {
     const worksWithoutMetadata = await db
         .selectFrom('works')
-        .where('title', 'is', null)
+        .where((eb) =>
+            eb.or([
+                eb('scrape_status', '=', 'pending'),
+                eb('scrape_status', 'is', null),
+                eb('scrape_status', '=', 'failed')
+            ])
+        )
         .select('id')
         .execute()
 

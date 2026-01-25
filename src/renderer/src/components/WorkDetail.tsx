@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { X, Play, Pause, User, Music, ChevronRight } from 'lucide-react'
+import { X, Play, Pause, User, Music, ChevronRight, ListPlus } from 'lucide-react'
 import { Work } from '../../../common/types'
 import { usePlayerStore } from '../store/player'
 import { encodePathForProtocol } from '../utils/pathUtils'
+import { AddToPlaylistDialog } from './AddToPlaylistDialog'
+import { TrackContextMenu } from './TrackContextMenu'
 
 interface WorkDetailProps {
     work: Work
@@ -17,6 +19,8 @@ interface Track {
 export function WorkDetail({ work, onClose }: WorkDetailProps) {
     const [tracks, setTracks] = useState<Track[]>([])
     const [loading, setLoading] = useState(true)
+    const [trackToAdd, setTrackToAdd] = useState<Track | null>(null)
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: Track } | null>(null)
 
     const {
         currentWork, playlist, currentIndex, isPlaying,
@@ -51,6 +55,15 @@ export function WorkDetail({ work, onClose }: WorkDetailProps) {
         } else {
             playWorkFromTrack(work, index)
         }
+    }
+
+    const handleContextMenu = (e: React.MouseEvent, track: Track) => {
+        e.preventDefault()
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            track
+        })
     }
 
     const cvList = work.cv_names?.split(/[,、/／]/).map(cv => cv.trim()).filter(Boolean) || []
@@ -158,7 +171,7 @@ export function WorkDetail({ work, onClose }: WorkDetailProps) {
                     <div className="px-6 py-3 border-b border-border sticky top-0 bg-card z-10">
                         <h3 className="text-sm font-bold text-muted-foreground flex items-center gap-2">
                             <Music className="w-4 h-4" />
-                            ファイル一覧
+                            トラック一覧
                             <span className="text-xs bg-muted px-2 py-0.5 rounded-full ml-2">{tracks.length} トラック</span>
                         </h3>
                     </div>
@@ -182,7 +195,8 @@ export function WorkDetail({ work, onClose }: WorkDetailProps) {
                                     <button
                                         key={track.path}
                                         onClick={() => handlePlayTrack(index)}
-                                        className={`w-full flex items-center gap-4 px-6 py-3 hover:bg-white/5 transition-all text-left border-b border-border/30 last:border-0 ${isActiveTrack ? 'bg-primary/10' : ''}`}
+                                        onContextMenu={(e) => handleContextMenu(e, track)}
+                                        className={`group w-full flex items-center gap-4 px-6 py-3 hover:bg-white/5 transition-all text-left border-b border-border/30 last:border-0 ${isActiveTrack ? 'bg-primary/10' : ''}`}
                                     >
                                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isActiveTrack ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                                             {isActiveTrack && isPlaying ? (
@@ -201,7 +215,19 @@ export function WorkDetail({ work, onClose }: WorkDetailProps) {
                                                 {track.name}
                                             </div>
                                         </div>
-                                        <ChevronRight className={`w-4 h-4 shrink-0 ${isActiveTrack ? 'text-primary' : 'text-muted-foreground/30'}`} />
+
+                                        <div
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                setTrackToAdd(track)
+                                            }}
+                                            className="p-2 text-muted-foreground/40 hover:text-primary hover:bg-primary/10 rounded-lg transition-all opacity-0 group-hover:opacity-100 scale-90 hover:scale-100"
+                                            title="プレイリストに追加"
+                                        >
+                                            <ListPlus className="w-5 h-5" />
+                                        </div>
+
+                                        <ChevronRight className={`w-4 h-4 shrink-0 transition-opacity group-hover:opacity-50 ${isActiveTrack ? 'text-primary' : 'text-muted-foreground/30'}`} />
                                     </button>
                                 )
                             })}
@@ -209,6 +235,31 @@ export function WorkDetail({ work, onClose }: WorkDetailProps) {
                     )}
                 </div>
             </div>
+
+            {contextMenu && (
+                <TrackContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    trackPath={contextMenu.track.path}
+                    trackName={contextMenu.track.name.split(/[/\\]/).pop() || contextMenu.track.name}
+                    workId={work.id}
+                    onClose={() => setContextMenu(null)}
+                    onPlay={() => {
+                        const idx = tracks.indexOf(contextMenu.track)
+                        if (idx !== -1) handlePlayTrack(idx)
+                    }}
+                    onAddToNewPlaylist={() => setTrackToAdd(contextMenu.track)}
+                />
+            )}
+
+            {trackToAdd && (
+                <AddToPlaylistDialog
+                    trackPath={trackToAdd.path}
+                    trackName={trackToAdd.name.split(/[/\\]/).pop() || trackToAdd.name}
+                    workId={work.id}
+                    onClose={() => setTrackToAdd(null)}
+                />
+            )}
         </div>
     )
 }

@@ -3,6 +3,7 @@ import { X, Play, Music2, Folder, Loader2, ListPlus } from 'lucide-react'
 import { Work } from '../../../common/types'
 import { usePlayerStore } from '../store/player'
 import { AddToPlaylistDialog } from './AddToPlaylistDialog'
+import { TrackContextMenu } from './TrackContextMenu'
 
 interface TrackListDialogProps {
     work: Work
@@ -22,6 +23,7 @@ export function TrackListDialog({ work, onClose }: TrackListDialogProps) {
     const [tracks, setTracks] = useState<Track[]>([])
     const [loading, setLoading] = useState(true)
     const [trackToAdd, setTrackToAdd] = useState<Track | null>(null)
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: Track } | null>(null)
     const { playWorkFromTrack, playlist, currentIndex, isPlaying, currentWork } = usePlayerStore()
 
     useEffect(() => {
@@ -45,6 +47,15 @@ export function TrackListDialog({ work, onClose }: TrackListDialogProps) {
     const handlePlayTrack = (trackIndex: number) => {
         playWorkFromTrack(work, trackIndex)
         onClose()
+    }
+
+    const handleContextMenu = (e: React.MouseEvent, track: Track) => {
+        e.preventDefault()
+        setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            track
+        })
     }
 
     // Check if this track is currently playing
@@ -112,6 +123,7 @@ export function TrackListDialog({ work, onClose }: TrackListDialogProps) {
                                                     <button
                                                         key={track.path}
                                                         onClick={() => handlePlayTrack(globalIndex)}
+                                                        onContextMenu={(e) => handleContextMenu(e, track)}
                                                         className={`
                                                             group w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all
                                                             ${playing
@@ -143,7 +155,7 @@ export function TrackListDialog({ work, onClose }: TrackListDialogProps) {
                                                                 e.stopPropagation()
                                                                 setTrackToAdd(track)
                                                             }}
-                                                            className="p-1.5 hover:bg-primary/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                                            className="p-1.5 text-muted-foreground/40 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors opacity-100"
                                                             title="プレイリストに追加"
                                                         >
                                                             <ListPlus className="w-4 h-4" />
@@ -158,6 +170,19 @@ export function TrackListDialog({ work, onClose }: TrackListDialogProps) {
                     </div>
                 </div>
             </div>
+
+            {contextMenu && (
+                <TrackContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    trackPath={contextMenu.track.path}
+                    trackName={contextMenu.track.name.split(/[/\\]/).pop() || contextMenu.track.name}
+                    workId={work.id}
+                    onClose={() => setContextMenu(null)}
+                    onPlay={() => handlePlayTrack(tracks.indexOf(contextMenu.track))}
+                    onAddToNewPlaylist={() => setTrackToAdd(contextMenu.track)}
+                />
+            )}
 
             {trackToAdd && (
                 <AddToPlaylistDialog
